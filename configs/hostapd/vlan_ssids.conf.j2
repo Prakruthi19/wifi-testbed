@@ -1,0 +1,28 @@
+# Rendered by testbed/network.py -- Module 3: one BSS per SSID, all bridged into br-lab.
+# The VLAN-filtering bridge assigns each BSS interface its PVID (see VlanLab.tag_ports).
+{% for bss in bsses %}
+{% if loop.first %}
+interface={{ bss.iface }}
+driver=nl80211
+ctrl_interface={{ ctrl_dir }}
+ctrl_interface_group=0
+country_code={{ country_code }}
+ieee80211d=1
+hw_mode={{ hw_mode }}
+channel={{ channel }}
+ieee80211n=1
+wmm_enabled=1
+{% else %}
+
+bss={{ bss.iface }}
+{% endif %}
+bridge={{ bridge }}
+ssid={{ bss.ssid }}
+ap_isolate={{ 1 if bss.ap_isolate else 0 }}
+wpa=2
+wpa_key_mgmt=WPA-PSK SAE
+rsn_pairwise=CCMP
+ieee80211w=1
+wpa_passphrase={{ bss.passphrase }}
+sae_password={{ bss.passphrase }}
+{% endfor %}

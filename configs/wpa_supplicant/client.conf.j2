@@ -1,0 +1,22 @@
+# Rendered by testbed/client.py
+ctrl_interface=DIR={{ ctrl_dir }}
+update_config=0
+country={{ country_code }}
+
+network={
+    ssid="{{ ssid }}"
+    scan_ssid=1
+    key_mgmt={{ key_mgmt }}
+{% if key_mgmt != "NONE" %}
+    proto=RSN
+    pairwise=CCMP
+    group=CCMP
+    ieee80211w={{ ieee80211w }}
+{% endif %}
+{% if psk %}
+    psk="{{ psk }}"
+{% endif %}
+{% if sae_password %}
+    sae_password="{{ sae_password }}"
+{% endif %}
+}

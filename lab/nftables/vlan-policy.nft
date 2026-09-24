@@ -1,0 +1,27 @@
+#!/usr/sbin/nft -f
+# Module 3 inter-VLAN policy. Loaded by testbed/network.py (VlanLab.up).
+# Every rule has a comment naming the test that depends on it, so a failing test maps to a rule.
+
+define MGMT = "br-lab.10"
+define TEST = "br-lab.20"
+define IOT  = "br-lab.30"
+
+table inet labfw
+delete table inet labfw
+
+table inet labfw {
+    chain input {
+        type filter hook input priority 0; policy accept;
+        iifname { $TEST, $IOT } udp dport { 53, 67 } accept comment "test_dns_resolves, test_lease_from_correct_subnet"
+        iifname { $TEST, $IOT } tcp dport 53 accept comment "test_dns_resolves"
+        iifname { $TEST, $IOT } ip daddr 10.10.10.1 drop comment "test_iot_cannot_reach_mgmt (gateway)"
+    }
+
+    chain forward {
+        type filter hook forward priority 0; policy drop;
+        ct state established,related accept comment "replies to allowed flows"
+        iifname $MGMT accept comment "test_mgmt_can_reach_iot: mgmt reaches everything"
+        # No other accepts: test and IoT stay in their own subnets
+        # (test_iot_cannot_reach_mgmt, test_test_ssid_cannot_reach_iot).
+    }
+}
