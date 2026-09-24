@@ -1,0 +1,34 @@
+# Rendered by testbed/ap.py -- single-BSS AP for Modules 1 and 2.
+interface={{ iface }}
+driver=nl80211
+ctrl_interface={{ ctrl_dir }}
+ctrl_interface_group=0
+
+ssid={{ ssid }}
+country_code={{ country_code }}
+ieee80211d=1
+hw_mode={{ hw_mode }}
+channel={{ channel }}
+ieee80211n=1
+wmm_enabled=1
+beacon_int=100
+
+{% if deny_macs %}
+macaddr_acl=0
+deny_mac_file={{ deny_mac_file }}
+{% endif %}
+{% if key_mgmt %}
+wpa=2
+wpa_key_mgmt={{ key_mgmt }}
+rsn_pairwise=CCMP
+ieee80211w={{ pmf }}
+{% if "WPA-PSK" in key_mgmt.split() %}
+wpa_passphrase={{ passphrase }}
+{% endif %}
+{% if "SAE" in key_mgmt.split() %}
+sae_password={{ sae_password or passphrase }}
+{% endif %}
+{% else %}
+# Open network
+auth_algs=1
+{% endif %}

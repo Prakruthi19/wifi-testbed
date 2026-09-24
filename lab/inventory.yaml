@@ -1,0 +1,60 @@
+# Lab inventory: radios, APs under qualification, clients, and the network plan.
+# setup_lab.sh creates the interfaces and namespaces named here.
+
+lab:
+  country_code: US
+  hwsim_radios: 4
+  capture_iface: hwsim0
+  gateway: 192.168.50.1
+  subnet: 192.168.50.0/24
+  dhcp_range: [192.168.50.100, 192.168.50.199]
+  dns_domain: lab
+  dns_test_name: gw.lab
+
+ap_radio:
+  iface: ap0            # hwsim radio 0, stays in the root namespace
+
+client_radios:
+  - {name: client1, iface: sta1, namespace: ns-client1}
+  - {name: client2, iface: sta2, namespace: ns-client2}
+  - {name: client3, iface: sta3, namespace: ns-client3}
+
+# APs that must pass the qualify_ap baseline (pytest -m qualify) before the full matrix runs.
+# Adding an entry here is "commissioning" new lab equipment.
+aps:
+  - name: ap-wpa2-2g
+    ssid: lab-wpa2
+    security: wpa2
+    pmf: 1
+    channel: 6
+    passphrase: labpassword123
+  - name: ap-wpa3-5g
+    ssid: lab-wpa3
+    security: wpa3
+    pmf: 2
+    channel: 36
+    passphrase: labpassword123
+  - name: ap-transition-2g
+    ssid: lab-trans
+    security: transition
+    pmf: 1
+    channel: 11
+    passphrase: labpassword123
+
+# Module 3: one SSID per VLAN. `isolatable` SSIDs get ap_isolate=1 in the isolation test.
+vlans:
+  - {ssid: lab-mgmt, vlan: 10, subnet: 10.10.10.0/24, gateway: 10.10.10.1,
+     dhcp_range: [10.10.10.100, 10.10.10.199], passphrase: mgmtpassword1}
+  - {ssid: lab-test, vlan: 20, subnet: 10.10.20.0/24, gateway: 10.10.20.1,
+     dhcp_range: [10.10.20.100, 10.10.20.199], passphrase: testpassword1}
+  - {ssid: lab-iot,  vlan: 30, subnet: 10.10.30.0/24, gateway: 10.10.30.1,
+     dhcp_range: [10.10.30.100, 10.10.30.199], passphrase: iotpassword12, isolatable: true}
+
+# Software versions under test. Fill in from `lab/setup_lab.sh --versions` on your VM so every
+# report can be tied to exact builds.
+software:
+  kernel: ""
+  hostapd: ""
+  wpa_supplicant: ""
+  dnsmasq: ""
+  tshark: ""
