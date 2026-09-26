@@ -11,7 +11,7 @@ from pathlib import Path
 
 from testbed.util import render, run, wait_for
 
-STAGES = ("association", "authentication", "key_exchange", "dhcp", "dns", "ping")
+STAGES = ("network_selection", "authentication", "association", "key_exchange", "dhcp", "dns", "ping")
 
 _TS = r"^(?P<ts>\d+\.\d+): "
 _RE_AUTH_START = re.compile(_TS + r".*Trying to authenticate with", re.M)
@@ -48,7 +48,7 @@ def supplicant_stage(log_text: str) -> str | None:
         return "key_exchange"
     if not _RE_AUTH_START.search(log_text):
         # The supplicant never picked the BSS: no common AKM, PMF mismatch, or not found.
-        return "association"
+        return "network_selection"
     if not _RE_ASSOC_START.search(log_text):
         return "authentication"
     if not _RE_ASSOCIATED.search(log_text):
@@ -172,7 +172,7 @@ class WifiClient:
             shutil.copy(log, artifacts / log.name)
         result = JoinResult(passed=False, assoc_ms=assoc_time_ms(log_text))
         if not connected:
-            result.failed_stage = supplicant_stage(log_text) or "association"
+            result.failed_stage = supplicant_stage(log_text) or "network_selection"
             return result
 
         ip, result.dhcp_ms = self.dhcp()

@@ -9,7 +9,8 @@ Capture point: `hwsim0` (radiotap + 802.11). WPA2 data frames are decrypted in W
 *Edit > Preferences > Protocols > IEEE 802.11 > Decryption keys* -> `wpa-pwd`
 `labpassword123:lab-diag`.
 
-Classifier stages: `association`, `authentication`, `key_exchange`, `dhcp`, `dns`, `success`
+Classifier stages, in join order: `network_selection`, `authentication`, `association`,
+`key_exchange`, `dhcp`, `dns`, `success`
 (plus `undetermined` when data is encrypted and no key was given).
 
 ---
@@ -38,7 +39,8 @@ Classifier stages: `association`, `authentication`, `key_exchange`, `dhcp`, `dns
 ## 3. WPA2-only client, WPA3-only AP
 
 * **Induce:** client `key_mgmt=WPA-PSK`, `ieee80211w=0`; AP SAE, PMF required.
-* **Expected stage:** `association` (spec allows association or authentication)
+* **Expected stage:** `network_selection` (the client filters the AP out before sending any
+  Authentication or Association frame)
 * **Expected frames:** Probe Req/Resp only. wpa_supplicant finds no common AKM in the RSN IE
   (AKM suite 8 = SAE) and never sends Authentication.
 * **Filter:** `wlan.fc.type_subtype == 0x04 || wlan.fc.type_subtype == 0x05`; inspect `wlan.rsn.akms.type`
@@ -48,10 +50,10 @@ Classifier stages: `association`, `authentication`, `key_exchange`, `dhcp`, `dns
 ## 4. PMF mismatch
 
 * **Induce:** AP WPA2-PSK `ieee80211w=2`; client `ieee80211w=0`.
-* **Expected stage:** `association`
+* **Expected stage:** `network_selection`
 * **Expected frames:** Probe Req/Resp; RSN Capabilities has MFPR=1. Client skips the BSS
   (no Auth). If a client did try, hostapd would reject the Assoc Req (status 31, "robust
-  management frame policy violation").
+  management frame policy violation"), and that variant would be classified `association`.
 * **Filter:** `wlan.rsn.capabilities.mfpr == 1`
 * **Observed:** _TBD_
 * **Status:** hypothesis
