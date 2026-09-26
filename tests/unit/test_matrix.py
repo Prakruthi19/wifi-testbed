@@ -20,7 +20,7 @@ def test_band_follows_channel():
 
 def test_wpa2_client_against_wpa3_ap_must_fail():
     exp = expected(ApConfig("wpa3", 2, 6), WPA2_ONLY)
-    assert (exp.outcome, exp.stage) == ("fail", "association")
+    assert (exp.outcome, exp.stage) == ("fail", "network_selection")
 
 
 def test_sae_without_required_pmf_is_flagged():
@@ -38,7 +38,8 @@ def test_transition_mode_needs_pmf_optional():
 
 
 def test_pmf_required_rejects_legacy_client():
-    assert expected(ApConfig("wpa2", 2, 6), WPA2_ONLY).outcome == "fail"
+    exp = expected(ApConfig("wpa2", 2, 6), WPA2_ONLY)
+    assert (exp.outcome, exp.stage) == ("fail", "network_selection")
     assert expected(ApConfig("wpa2", 2, 6), WPA3).outcome == "pass"
 
 

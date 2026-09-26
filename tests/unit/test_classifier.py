@@ -78,12 +78,19 @@ def test_wrong_sae_password_is_authentication():
     assert res.stage == "authentication" and "Confirm" in res.summary
 
 
-def test_akm_or_pmf_mismatch_is_association():
+def test_akm_or_pmf_mismatch_is_network_selection():
+    # Client sees the AP's RSN element, finds it incompatible and never sends Auth or Assoc.
     res = classify(Seq().probe().probe().frames)
-    assert res.stage == "association" and "never attempted" in res.summary
+    assert res.stage == "network_selection" and "never attempted" in res.summary
+
+
+def test_no_client_frames_is_network_selection():
+    assert classify([]).stage == "network_selection"
 
 
 def test_assoc_reject_is_association():
+    # Status 31 (robust management frame policy violation): the client picked the network
+    # despite a PMF mismatch and the AP refused it, so this one really is association.
     res = classify(Seq().probe().open_auth().assoc(status=31).frames)
     assert res.stage == "association" and "31" in res.summary
 

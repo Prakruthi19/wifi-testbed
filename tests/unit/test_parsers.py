@@ -17,7 +17,7 @@ def test_assoc_time_and_success():
 
 def test_supplicant_stage_inference():
     lines = CONNECTED_LOG.splitlines()
-    assert supplicant_stage("1.0: sta1: scanning\n") == "association"
+    assert supplicant_stage("1.0: sta1: scanning\n") == "network_selection"
     assert supplicant_stage(lines[0]) == "authentication"
     assert supplicant_stage("\n".join(lines[:2])) == "association"
     assert supplicant_stage("\n".join(lines[:3])) == "key_exchange"

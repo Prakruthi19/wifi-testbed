@@ -115,7 +115,8 @@ def test_qualify_ap(ap_entry, step, hostap, dnsmasq, clients, inventory, artifac
                       artifacts=artifacts)
     try:
         if step in ("wpa3_join", "wpa2_join"):
-            assert res.failed_stage not in ("association", "authentication", "key_exchange"), res
+            assert res.failed_stage not in (
+                "network_selection", "authentication", "association", "key_exchange"), res
         elif step == "dhcp_lease":
             assert res.ip and res.ip.startswith(lab["subnet"].rsplit(".", 1)[0]), res
         elif step == "dns":
