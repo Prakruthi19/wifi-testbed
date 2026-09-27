@@ -30,8 +30,10 @@ part() {
 part "1/6  Lab: 4 emulated radios, AP in the root namespace, 3 clients in their own namespaces"
 [[ -e /sys/class/net/hwsim0 ]] || bash lab/setup_lab.sh
 bash lab/setup_lab.sh --versions
-iw dev | grep -E "Interface|type" | paste - - | sed 's/^/  /'
-ip netns list
+echo "  root namespace: $(iw dev | awk '/Interface/{print $2}' | xargs) + hwsim0 (capture point)"
+for ns in $(ip netns list | awk '{print $1}' | sort); do
+  echo "  $ns: $(ip netns exec "$ns" iw dev | awk '/Interface/{print $2}' | xargs)"
+done
 
 part "2/6  One good join and one wrong password: where did it fail, and how do we know?"
 tests -m failures -k "baseline_success or wrong_passphrase_wpa2"
