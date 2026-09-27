@@ -5,10 +5,12 @@ from __future__ import annotations
 import re
 import shutil
 import statistics
+import subprocess
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
+from testbed.perf import IperfResult, parse_iperf_json
 from testbed.util import render, run, wait_for
 
 STAGES = ("network_selection", "authentication", "association", "key_exchange", "dhcp", "dns", "ping")
@@ -137,10 +139,16 @@ class WifiClient:
     def dhcp(self, timeout: float = 10) -> tuple[str | None, float]:
         conf = self.workdir / "dhclient.conf"
         conf.write_text(f"timeout {int(timeout)};\nretry 1;\n")
+        leases = self.workdir / "dhclient.leases"
+        # A lease left over from an earlier join would let dhclient "succeed" with no server.
+        leases.unlink(missing_ok=True)
         start = time.monotonic()
-        self.sh("dhclient", "-1", "-v", "-cf", str(conf), "-pf", str(self.workdir / "dhclient.pid"),
-                "-lf", str(self.workdir / "dhclient.leases"), self.iface,
-                check=False, timeout=timeout + 5)
+        try:
+            self.sh("dhclient", "-1", "-v", "-cf", str(conf), "-pf", str(self.workdir / "dhclient.pid"),
+                    "-lf", str(leases), self.iface, check=False, timeout=timeout + 5)
+        except subprocess.TimeoutExpired:
+            # No DHCP server answered and dhclient kept retrying; the caller sees ip=None.
+            pass
         elapsed = round((time.monotonic() - start) * 1000, 1)
         return self.ipv4(), elapsed
 
@@ -159,6 +167,19 @@ class WifiClient:
     def tcp_connect(self, target: str, port: int, timeout: float = 2) -> bool:
         return self.sh("nc", "-z", "-w", str(int(timeout)), target, str(port),
                        check=False, timeout=timeout + 5).returncode == 0
+
+    def iperf(self, server: str, seconds: int = 5, reverse: bool = False,
+              port: int = 5201) -> IperfResult:
+        """One iperf3 TCP run to `server`. reverse=True measures downlink (server -> client)."""
+        direction = "downlink" if reverse else "uplink"
+        cmd = ["iperf3", "-c", server, "-p", str(port), "-t", str(seconds), "-J"]
+        if reverse:
+            cmd.append("-R")
+        try:
+            proc = self.sh(*cmd, check=False, timeout=seconds + 15)
+        except subprocess.TimeoutExpired:
+            return IperfResult(direction, 0.0, 0.0, None, error="iperf3 client timed out")
+        return parse_iperf_json(proc.stdout, direction)
 
     # -- the full join ---------------------------------------------------------------------
     def join(self, ssid: str, network: dict, gateway: str | None = None,

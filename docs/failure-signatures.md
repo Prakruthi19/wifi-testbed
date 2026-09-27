@@ -61,12 +61,20 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 ## 5. MAC blocked
 
 * **Induce:** client MAC in hostapd `deny_mac_file`.
-* **Expected stage:** `authentication`
-* **Expected frames:** Auth Req (Open) -> Auth Resp with non-zero status (expected 1,
-  unspecified failure), repeated.
-* **Filter:** `wlan.fc.type_subtype == 0x0b && wlan.fixed.status_code != 0`
-* **Observed:** _TBD_
-* **Status:** hypothesis
+* **Expected stage:** `network_selection` (changed from `authentication` after the first run)
+* **Expected frames:** Probe Requests from the client with no Probe Response to it, and no
+  Authentication frames at all. The AP stays silent towards the denied MAC, so the client
+  never picks the network.
+* **Filter:** `wlan.sa == <client MAC> || wlan.da == <client MAC>`
+* **Observed (2026-09-27, first run):** classifier said `network_selection`: "client never
+  attempted authentication or association". The last probe frames were four Probe Requests
+  from the client to broadcast with no Probe Response, and no Authentication frames. Not yet
+  cross-checked against the wpa_supplicant log or opened in Wireshark.
+* **Other APs:** many vendors answer a blocked MAC with an Authentication Response carrying a
+  non-zero status (e.g. 1, unspecified failure) instead; that is an `authentication` failure.
+  The classifier handles both (unit test `test_mac_blocked_is_authentication`); the expected
+  stage here is for hostapd.
+* **Status:** observed once, pcap review pending
 
 ## 6. DHCP server down
 
@@ -74,7 +82,10 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 * **Expected stage:** `dhcp`
 * **Expected frames:** full join (M1-M4) -> DHCP Discover repeated, no Offer.
 * **Filter:** `dhcp` (with decryption on)
-* **Observed:** _TBD_
+* **Observed (2026-09-27, first run):** dhclient log showed DHCPDISCOVER repeated with no
+  Offer, as expected, but the test crashed: dhclient outlived the harness's subprocess
+  timeout and `TimeoutExpired` was not caught. Fixed in `WifiClient.dhcp()`, which now
+  treats the timeout as "no lease" and deletes old leases first. Re-run pending.
 * **Status:** hypothesis
 
 ## 7. DNS broken

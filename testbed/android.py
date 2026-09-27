@@ -51,6 +51,45 @@ def parse_wifi_enabled(status_text: str) -> bool:
 
 
 @dataclass
+class SavedNetwork:
+    network_id: int
+    ssid: str
+    security: str
+
+
+def parse_saved_networks(text: str) -> list[SavedNetwork]:
+    """Rows of `cmd wifi list-networks`: "<id>  <ssid>  <security type>" under a header line."""
+    out = []
+    for line in text.splitlines():
+        parts = line.split()
+        if len(parts) >= 3 and parts[0].isdigit():
+            out.append(SavedNetwork(int(parts[0]), " ".join(parts[1:-1]), parts[-1]))
+    return out
+
+
+def phone_join_stage(logcat_text: str) -> str | None:
+    """Where a phone's join stopped, from the wpa_supplicant lines in its logcat.
+
+    Android runs the same wpa_supplicant as the lab clients, so the same events show up
+    (tag wpa_supplicant). None means CTRL-EVENT-CONNECTED was seen. The mapping mirrors
+    testbed.client.supplicant_stage and is a hypothesis until checked on a real phone.
+    """
+    if "CTRL-EVENT-CONNECTED" in logcat_text:
+        return None
+    if "CTRL-EVENT-AUTH-REJECT" in logcat_text:
+        return "authentication"
+    if "CTRL-EVENT-ASSOC-REJECT" in logcat_text:
+        return "association"
+    if "4-Way Handshake failed" in logcat_text or "reason=WRONG_KEY" in logcat_text:
+        return "key_exchange"
+    if "reason=AUTH_FAILED" in logcat_text:
+        return "authentication"
+    if "Trying to associate" not in logcat_text and "Trying to authenticate" not in logcat_text:
+        return "network_selection"
+    return "undetermined"
+
+
+@dataclass
 class Adb:
     serial: str | None = None
     adb_path: str = "adb"
@@ -115,6 +154,28 @@ class Adb:
                       interval=0.5)
         return round(time.monotonic() - start, 2) if ok else None
 
+    def connect_network(self, ssid: str, security: str = "wpa2", password: str | None = None) -> None:
+        """Join a network by command. security: open, owe, wpa2 or wpa3 (Android 11+)."""
+        cmd = f"cmd wifi connect-network {shlex.quote(ssid)} {security}"
+        if password is not None:
+            cmd += f" {shlex.quote(password)}"
+        self.shell(cmd)
+
+    def list_networks(self) -> list[SavedNetwork]:
+        return parse_saved_networks(self.shell("cmd wifi list-networks", check=False))
+
+    def forget_network(self, ssid: str) -> int:
+        """Forget every saved network with this SSID; returns how many were removed."""
+        saved = [n for n in self.list_networks() if n.ssid.strip('"') == ssid]
+        for n in saved:
+            self.shell(f"cmd wifi forget-network {n.network_id}", check=False)
+        return len(saved)
+
+    def set_verbose_logging(self, enabled: bool) -> None:
+        """Wi-Fi verbose logging: more wpa_supplicant/framework detail in logcat."""
+        self.shell(f"cmd wifi set-verbose-logging {'enabled' if enabled else 'disabled'}",
+                   check=False)
+
     def set_airplane_mode(self, enabled: bool) -> None:
         self.shell(f"cmd connectivity airplane-mode {'enable' if enabled else 'disable'}")
 
@@ -130,6 +191,12 @@ class Adb:
     # -- evidence --------------------------------------------------------------------------
     def logcat_clear(self) -> None:
         self.run("logcat", "-c", check=False)
+
+    def bugreport(self, dest: Path, timeout: float = 600) -> Path:
+        """Full `adb bugreport` zip (logs + system state), the usual attachment for Android bugs."""
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        self.run("bugreport", str(dest), timeout=timeout)
+        return dest
 
     def logcat_wifi(self, max_lines: int = 2000) -> str:
         filters = [f"{tag}:V" for tag in WIFI_LOG_TAGS] + ["*:S"]

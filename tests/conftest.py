@@ -31,6 +31,12 @@ def pytest_addoption(parser):
     g.addoption("--channels", default=None, help="comma-separated channel subset, e.g. 6,36")
     g.addoption("--android-serial", default=None, help="adb serial (default: only device)")
     g.addoption("--android-ping-host", default="8.8.8.8", help="host pinged from the emulator")
+    g.addoption("--android-ssid", default=None,
+                help="network the phone joins by command (join tests skip without it)")
+    g.addoption("--android-security", default="wpa2", choices=["open", "owe", "wpa2", "wpa3"])
+    g.addoption("--android-psk", default=None, help="passphrase for --android-ssid")
+    g.addoption("--android-bugreport", action="store_true",
+                help="save an adb bugreport zip when an Android test fails (slow)")
 
 
 def lab_available() -> str | None:

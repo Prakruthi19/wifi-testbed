@@ -1,0 +1,83 @@
+"""Throughput with iperf3: a server on the AP side (root namespace), clients in their namespaces.
+
+In this lab the radios are emulated, so the numbers measure the software path (kernel, hostapd,
+CPU), not RF. They are a smoke test and a regression baseline, not a statement about air speed.
+"""
+
+from __future__ import annotations
+
+import json
+import subprocess
+from dataclasses import asdict, dataclass
+from pathlib import Path
+
+from testbed.util import log, wait_for
+
+IPERF_PORT = 5201
+
+
+@dataclass
+class IperfResult:
+    direction: str            # "uplink" (client -> AP side) or "downlink" (AP side -> client)
+    seconds: float
+    mbps: float               # goodput the receiver saw
+    retransmits: int | None   # TCP retransmits on the sender; None when iperf3 does not report
+    error: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def parse_iperf_json(text: str, direction: str) -> IperfResult:
+    """Read `iperf3 -J` output. Receiver-side bits/s is the number that counts."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return IperfResult(direction, 0.0, 0.0, None, error=f"not JSON: {text[:200]!r}")
+    if data.get("error"):
+        return IperfResult(direction, 0.0, 0.0, None, error=data["error"])
+    end = data.get("end", {})
+    received = end.get("sum_received", {})
+    sent = end.get("sum_sent", {})
+    return IperfResult(
+        direction=direction,
+        seconds=round(received.get("seconds", 0.0), 2),
+        mbps=round(received.get("bits_per_second", 0.0) / 1e6, 2),
+        retransmits=sent.get("retransmits"),
+    )
+
+
+class IperfServer:
+    """iperf3 -s bound to one address in the root namespace (the AP / gateway side)."""
+
+    def __init__(self, bind: str, workdir: Path, port: int = IPERF_PORT):
+        self.bind = bind
+        self.port = port
+        self.log = Path(workdir) / "iperf3-server.log"
+        self._proc: subprocess.Popen | None = None
+
+    def start(self) -> "IperfServer":
+        self.stop()
+        self.log.parent.mkdir(parents=True, exist_ok=True)
+        self._proc = subprocess.Popen(
+            ["iperf3", "-s", "-B", self.bind, "-p", str(self.port), "--logfile", str(self.log)],
+            stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True,
+        )
+        if not wait_for(lambda: self._listening() or self._proc.poll() is not None, timeout=5):
+            log.warning("iperf3 server on %s:%s did not start listening", self.bind, self.port)
+        if self._proc.poll() is not None:
+            raise RuntimeError(f"iperf3 server exited: {self._proc.stderr.read()}")
+        return self
+
+    def _listening(self) -> bool:
+        out = subprocess.run(["ss", "-ltn"], capture_output=True, text=True).stdout
+        return f"{self.bind}:{self.port}" in out
+
+    def stop(self) -> None:
+        if self._proc and self._proc.poll() is None:
+            self._proc.terminate()
+            try:
+                self._proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self._proc.kill()
+        self._proc = None

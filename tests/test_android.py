@@ -1,7 +1,10 @@
-"""Module 4: Android client state handling on the emulator over ADB (host only: pytest -m android).
+"""Module 4: Android Wi-Fi over ADB, on the emulator or a real phone (host only: pytest -m android).
 
-The emulator only joins its built-in AndroidWifi network, so these tests cover state handling,
-not the security matrix. Thresholds are defined in docs/test-plan.md.
+State-handling tests run anywhere. The join tests need --android-ssid (and --android-psk): the
+phone joins that network by command, and the wrong-password test names the failed stage from the
+phone's own wpa_supplicant lines in logcat. The emulator only sees its built-in AndroidWifi
+network, so the wrong-password test needs a real phone on a secured network (e.g. home Wi-Fi).
+Thresholds are defined in docs/test-plan.md.
 """
 
 from __future__ import annotations
@@ -10,12 +13,17 @@ import time
 
 import pytest
 
-from testbed.android import Adb, parse_wifi_info
+from testbed.android import Adb, parse_wifi_info, phone_join_stage
 from testbed.util import wait_for
 
 pytestmark = pytest.mark.android
 
 RECONNECT_TIMEOUT_S = 30
+JOIN_TIMEOUT_S = 30
+WRONG_PASSWORD_WAIT_S = 20
+# Same expectations as the lab's induced failures: WPA2 fails in the 4-way handshake,
+# WPA3 (SAE) fails during authentication.
+WRONG_PASSWORD_STAGE = {"wpa2": "key_exchange", "wpa3": "authentication"}
 DEGRADED_PROBE_TIMEOUT_S = 20
 
 
@@ -39,6 +47,7 @@ def ping_host(request):
 def evidence(request, adb, artifacts, attach):
     """Wi-Fi on before each test; ADB transcript always, logcat excerpt on failure."""
     adb.transcript.clear()
+    adb.set_verbose_logging(True)
     adb.logcat_clear()
     adb.set_airplane_mode(False)
     adb.set_wifi_enabled(True)
@@ -48,6 +57,18 @@ def evidence(request, adb, artifacts, attach):
         path = artifacts / "logcat-wifi.txt"
         path.write_text(adb.logcat_wifi())
         attach(path, "logcat (Wi-Fi/connectivity)")
+        if request.config.getoption("--android-bugreport"):
+            attach(adb.bugreport(artifacts / "bugreport.zip"), "adb bugreport")
+
+
+@pytest.fixture
+def target(request):
+    """(ssid, security, psk) the phone joins by command; skips when --android-ssid is not set."""
+    ssid = request.config.getoption("--android-ssid")
+    if not ssid:
+        pytest.skip("pass --android-ssid (and --android-psk) to run join tests")
+    return ssid, request.config.getoption("--android-security"), \
+        request.config.getoption("--android-psk")
 
 
 def test_reconnect_after_toggle(adb, ping_host, record_property):
@@ -93,3 +114,43 @@ def test_degraded_network(adb, ping_host, record_property):
         assert ok, f"connectivity probe failed within {DEGRADED_PROBE_TIMEOUT_S}s on gprs/edge"
     finally:
         adb.emu_network()
+
+
+def test_join_named_network(adb, target, ping_host, artifacts, record_property):
+    ssid, security, psk = target
+    adb.forget_network(ssid)
+    try:
+        start = time.monotonic()
+        adb.connect_network(ssid, security, psk)
+        joined = wait_for(lambda: adb.connected_ssid() == ssid and adb.ping(ping_host),
+                          timeout=JOIN_TIMEOUT_S, interval=0.5)
+        record_property("join_s", round(time.monotonic() - start, 2))
+        logcat = adb.logcat_wifi()
+        (artifacts / "logcat-join.txt").write_text(logcat)
+        assert joined, (f"not connected to {ssid} with a ping within {JOIN_TIMEOUT_S}s; "
+                        f"phone log says stage={phone_join_stage(logcat)}")
+        assert ssid in [n.ssid.strip('"') for n in adb.list_networks()], "network was not saved"
+    finally:
+        adb.forget_network(ssid)
+    assert ssid not in [n.ssid.strip('"') for n in adb.list_networks()], "forget-network left it saved"
+
+
+def test_wrong_password_names_stage(adb, target, artifacts, record_property):
+    ssid, security, _ = target
+    if security not in WRONG_PASSWORD_STAGE:
+        pytest.skip(f"no password to get wrong on a {security} network")
+    adb.forget_network(ssid)
+    try:
+        adb.connect_network(ssid, security, "wrongpassword1")
+        joined = wait_for(lambda: adb.connected_ssid() == ssid, timeout=WRONG_PASSWORD_WAIT_S,
+                          interval=0.5)
+        logcat = adb.logcat_wifi()
+    finally:
+        adb.forget_network(ssid)
+    (artifacts / "logcat-wrong-password.txt").write_text(logcat)
+    stage = phone_join_stage(logcat)
+    record_property("phone_stage", stage)
+    assert not joined, "phone joined with a wrong password"
+    assert stage == WRONG_PASSWORD_STAGE[security], (
+        f"phone log says {stage!r}, expected {WRONG_PASSWORD_STAGE[security]!r}; "
+        f"see logcat-wrong-password.txt")

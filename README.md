@@ -17,7 +17,8 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | &nbsp;&nbsp;qualify_ap | 6-step baseline for each AP in `lab/inventory.yaml` | `-m qualify` |
 | 2. Capture diagnosis | induces 7 failure types, classifies each pcap by failure stage | `-m failures` |
 | 3. VLAN segmentation | 3 SSIDs -> 3 VLANs, nftables isolation tests | `-m vlan` |
-| 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network | `-m android` (host) |
+| 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network; join a named network by command, wrong password named by stage from logcat, bugreport on failure | `-m android` (host) |
+| Performance | iperf3 TCP uplink/downlink after a full join (WPA2 ch6, WPA3 ch36) | `-m perf` |
 
 See [docs/test-plan.md](docs/test-plan.md) for the matrix and expected results,
 [docs/failure-signatures.md](docs/failure-signatures.md) for the failure catalog, and
@@ -90,6 +91,7 @@ $PYTEST -m matrix                        # full Module 1 matrix (100 cases x 5 j
 $PYTEST -m matrix --channels 6,36 --repeats 2   # quick subset
 $PYTEST -m failures                      # Module 2
 $PYTEST -m vlan                          # Module 3
+$PYTEST -m perf                          # iperf3 throughput
 ```
 
 Every run writes `reports/junit.xml`, `reports/report.html` (with the connectivity matrix in the
@@ -111,6 +113,12 @@ on the host:
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/pytest -m android [--android-serial emulator-5554] [--android-ping-host 8.8.8.8]
+
+# Join tests: the phone joins a named network by command; the wrong-password test needs a
+# secured network, so use a real phone over USB (not ADB over Wi-Fi: forgetting the network
+# would cut the ADB link).
+.venv/bin/pytest -m android --android-ssid HomeNet --android-security wpa2 \
+    --android-psk '<password>' [--android-bugreport]
 ```
 
 Android tests are deselected unless you pass `-m android`, so they stay out of VM runs.
@@ -129,7 +137,10 @@ harness or configs, and those count too.
   fading.
 * It covers one driver (`mac80211_hwsim`) and one AP/client software stack
   (hostapd/wpa_supplicant).
-* The Android emulator can only join its built-in `AndroidWifi` network, so Module 4 tests
-  client state handling, not the security matrix.
+* The Android emulator can only join its built-in `AndroidWifi` network, and it runs on the
+  host while the emulated radios live in the VM, so no phone ever joins the lab AP. The join
+  tests run against whatever network the phone can see (e.g. home Wi-Fi), not the lab matrix.
+* Throughput over emulated radios measures the software path, not air speed; it is a smoke
+  test and a regression baseline only.
 * Expected failure stages in Module 2 stay hypotheses until they're confirmed against captures
   (see the status field in `docs/failure-signatures.md`).
