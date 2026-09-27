@@ -28,12 +28,14 @@ class OpenWrtAP:
     radio: str = "radio0"          # wifi-device section (the physical radio)
     iface: str = "default_radio0"  # wifi-iface section (the SSID on that radio)
 
-    def uci_commands(self, ap: ApConfig) -> list[str]:
+    def uci_commands(self, ap: ApConfig, htmode: str | None = None) -> list[str]:
+        """htmode sets channel width, e.g. HT20, HT40, VHT80, HE80 (None keeps the router's)."""
         w = "wireless"
         cmds = [
             f"uci set {w}.{self.radio}.disabled=0",
             f"uci set {w}.{self.radio}.band={BAND[ap.hw_mode]}",
             f"uci set {w}.{self.radio}.channel={ap.channel}",
+            *([f"uci set {w}.{self.radio}.htmode={htmode}"] if htmode else []),
             f"uci set {w}.{self.iface}.mode=ap",
             f"uci set {w}.{self.iface}.ssid={shlex.quote(ap.ssid)}",
             f"uci set {w}.{self.iface}.encryption={ENCRYPTION[ap.security]}",
@@ -51,9 +53,9 @@ class OpenWrtAP:
             ["ssh", "-o", "BatchMode=yes", "-o", "ConnectTimeout=10", f"{self.user}@{self.host}",
              command], capture_output=True, text=True, timeout=timeout, check=True)
 
-    def apply(self, ap: ApConfig) -> None:
+    def apply(self, ap: ApConfig, htmode: str | None = None) -> None:
         """Push the config and reload Wi-Fi. The BSS is down for a few seconds during reload."""
-        self.ssh(" && ".join(self.uci_commands(ap)))
+        self.ssh(" && ".join(self.uci_commands(ap, htmode)))
 
     def status(self) -> str:
         """`iwinfo` output: SSID, channel, encryption as the radio actually runs them."""

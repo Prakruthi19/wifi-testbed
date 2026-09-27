@@ -10,7 +10,7 @@ import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-from testbed.perf import IperfResult, parse_iperf_json
+from testbed.perf import IperfResult, UdpResult, parse_iperf_json, parse_iperf_udp_json
 from testbed.util import render, run, wait_for
 
 STAGES = ("network_selection", "authentication", "association", "key_exchange", "dhcp", "dns", "ping")
@@ -189,10 +189,11 @@ class WifiClient:
                        check=False, timeout=timeout + 5).returncode == 0
 
     def iperf(self, server: str, seconds: int = 5, reverse: bool = False,
-              port: int = 5201) -> IperfResult:
+              port: int = 5201, streams: int = 1) -> IperfResult:
         """One iperf3 TCP run to `server`. reverse=True measures downlink (server -> client)."""
         direction = "downlink" if reverse else "uplink"
-        cmd = ["iperf3", "-c", server, "-p", str(port), "-t", str(seconds), "-J"]
+        cmd = ["iperf3", "-c", server, "-p", str(port), "-t", str(seconds), "-P", str(streams),
+               "-J"]
         if reverse:
             cmd.append("-R")
         try:
@@ -200,6 +201,20 @@ class WifiClient:
         except subprocess.TimeoutExpired:
             return IperfResult(direction, 0.0, 0.0, None, error="iperf3 client timed out")
         return parse_iperf_json(proc.stdout, direction)
+
+    def iperf_udp(self, server: str, mbps: float = 20, seconds: int = 5, reverse: bool = False,
+                  port: int = 5201) -> UdpResult:
+        """One iperf3 UDP run at a fixed offered load; reports jitter and datagram loss."""
+        direction = "downlink" if reverse else "uplink"
+        cmd = ["iperf3", "-c", server, "-p", str(port), "-u", "-b", f"{mbps:g}M",
+               "-t", str(seconds), "-J"]
+        if reverse:
+            cmd.append("-R")
+        try:
+            proc = self.sh(*cmd, check=False, timeout=seconds + 15)
+        except subprocess.TimeoutExpired:
+            return UdpResult(direction, mbps, 0.0, 0.0, 100.0, error="iperf3 client timed out")
+        return parse_iperf_udp_json(proc.stdout, direction, mbps)
 
     # -- the full join ---------------------------------------------------------------------
     def join(self, ssid: str, network: dict, gateway: str | None = None,
