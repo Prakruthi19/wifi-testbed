@@ -195,3 +195,10 @@ def test_compare_junit(tmp_path):
     assert c["regressed"] == [("t::breaks", "passed -> failed")]
     assert c["fixed"] == [("t::heals", "failed -> passed")]
     assert c["new"] == [("t::added", "skipped")]
+
+
+def test_consistency():
+    from testbed.compare import consistency
+
+    runs = [{"a": "passed", "b": "passed"}, {"a": "passed", "b": "failed"}, {"a": "passed"}]
+    assert consistency(runs) == {"b": ["passed", "failed", "missing"]}

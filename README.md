@@ -103,6 +103,7 @@ $PYTEST -m perf                          # iperf3 throughput
 $PYTEST -m smarthome                     # IoT device behaviours
 $PYTEST -m faults                        # fault injection while connected
 
+sudo lab/repeat.sh 3 -m failures         # repeatability: 3 runs, list tests that flip
 sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop stray daemons
 .venv/bin/python -m testbed.compare reports/baseline/junit.xml reports/junit.xml  # regressions
 ```
@@ -143,6 +144,21 @@ results, the triggering config (`reports/artifacts/<test>/results.json` has it),
 labels for severity (`sev:1`-`sev:4`) and status (`new`, `confirmed`, `fixed`, `regressed`).
 When a bug is fixed, add a regression test and link it from the issue. Many bugs will be in the
 harness or configs, and those count too.
+
+## Verification status
+
+What has actually been run, and where. Update this after every lab run.
+
+| Suite | Last run | Result |
+|---|---|---|
+| `tests/unit` | every commit | all pass (no lab needed) |
+| `-m failures` | 2026-09-27, Ubuntu 24.04 VM | 6/8 before the fixes for issues #3-#5; not yet re-run with them |
+| `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
+| `-m android` | not run (no device) | written only |
+| `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
+
+Performance numbers from `-m perf` are virtual-network measurements (emulated radios in one VM).
+They are stamped as such in every saved result and are not Wi-Fi performance figures.
 
 ## Limitations
 

@@ -12,7 +12,7 @@ import json
 import pytest
 
 from testbed.matrix import CLIENT_PROFILES, ApConfig
-from testbed.perf import IperfServer
+from testbed.perf import VIRTUAL_NOTE, IperfServer
 
 pytestmark = [pytest.mark.lab, pytest.mark.perf]
 
@@ -53,8 +53,10 @@ def test_throughput(ap, direction, hostap, dnsmasq, clients, inventory, iperf_se
         client.disconnect()
 
     (artifacts / "iperf.json").write_text(json.dumps(
-        {"ap": ap.label, "join": join.to_dict(), "iperf": result.to_dict()}, indent=2))
+        {"measurement": VIRTUAL_NOTE, "ap": ap.label, "join": join.to_dict(),
+         "iperf": result.to_dict()}, indent=2))
     attach(artifacts / "iperf.json")
+    record_property("measurement", VIRTUAL_NOTE)
     record_property("mbps", result.mbps)
     record_property("retransmits", result.retransmits)
 
@@ -79,8 +81,9 @@ def test_udp_jitter_loss(direction, hostap, dnsmasq, clients, inventory, iperf_s
         client.disconnect()
 
     (artifacts / "iperf-udp.json").write_text(json.dumps(
-        {"ap": ap.label, "iperf_udp": result.to_dict()}, indent=2))
+        {"measurement": VIRTUAL_NOTE, "ap": ap.label, "iperf_udp": result.to_dict()}, indent=2))
     attach(artifacts / "iperf-udp.json")
+    record_property("measurement", VIRTUAL_NOTE)
     record_property("jitter_ms", result.jitter_ms)
     record_property("lost_percent", result.lost_percent)
 
@@ -102,8 +105,9 @@ def test_latency(hostap, dnsmasq, clients, inventory, artifacts, attach, capture
         stats = client.ping_stats(lab["gateway"], count=20)
     finally:
         client.disconnect()
-    (artifacts / "ping.json").write_text(json.dumps(stats, indent=2))
+    (artifacts / "ping.json").write_text(json.dumps({"measurement": VIRTUAL_NOTE, **stats}, indent=2))
     attach(artifacts / "ping.json")
+    record_property("measurement", VIRTUAL_NOTE)
     for key, value in stats.items():
         record_property(key, value)
     assert stats.get("loss_percent") == 0.0, f"ping loss: {stats}"
