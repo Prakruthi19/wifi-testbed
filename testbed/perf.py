@@ -47,6 +47,32 @@ def parse_iperf_json(text: str, direction: str) -> IperfResult:
     )
 
 
+@dataclass
+class UdpResult:
+    direction: str
+    target_mbps: float        # offered load (-b)
+    mbps: float               # what the receiver got
+    jitter_ms: float
+    lost_percent: float
+    error: str | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+
+def parse_iperf_udp_json(text: str, direction: str, target_mbps: float) -> UdpResult:
+    """Read `iperf3 -u -J` output: jitter and datagram loss matter for voice/video/cameras."""
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return UdpResult(direction, target_mbps, 0.0, 0.0, 100.0, error=f"not JSON: {text[:200]!r}")
+    if data.get("error"):
+        return UdpResult(direction, target_mbps, 0.0, 0.0, 100.0, error=data["error"])
+    s = data.get("end", {}).get("sum", {})
+    return UdpResult(direction, target_mbps, round(s.get("bits_per_second", 0.0) / 1e6, 2),
+                     round(s.get("jitter_ms", 0.0), 3), round(s.get("lost_percent", 100.0), 2))
+
+
 class IperfServer:
     """iperf3 -s bound to one address in the root namespace (the AP / gateway side)."""
 

@@ -133,3 +133,22 @@ def test_bug_draft(tmp_path):
     text = draft(d)
     assert text.startswith("# mac_blocked: classifier says network_selection, expected authentication")
     assert '-k "mac_blocked"' in text and "frame #191 probe_req" in text and "capture.pcap" in text
+
+
+def test_parse_iperf_udp_json():
+    from testbed.perf import parse_iperf_udp_json
+
+    text = json.dumps({"end": {"sum": {"bits_per_second": 19_800_000, "jitter_ms": 0.0421,
+                                       "lost_percent": 0.35}}})
+    r = parse_iperf_udp_json(text, "uplink", 20)
+    assert (r.mbps, r.jitter_ms, r.lost_percent, r.error) == (19.8, 0.042, 0.35, None)
+    assert parse_iperf_udp_json('{"error": "boom"}', "uplink", 20).lost_percent == 100.0
+
+
+def test_openwrt_htmode():
+    from testbed.matrix import ApConfig
+    from testbed.openwrt import OpenWrtAP
+
+    ap = ApConfig("wpa2", 1, 6, ssid="s", passphrase="labpassword123")
+    assert "uci set wireless.radio0.htmode=HT20" in OpenWrtAP("h").uci_commands(ap, "HT20")
+    assert not any("htmode" in c for c in OpenWrtAP("h").uci_commands(ap))
