@@ -2,8 +2,9 @@
 
     python -m classifier.classify_join capture.pcap [--sta MAC] [--wpa-pwd PASS:SSID] [--json]
 
-Output stage is one of: association, authentication, key_exchange, dhcp, dns, success, or
-undetermined (data frames are encrypted and no key was given, so DHCP/DNS cannot be seen).
+Output stage is one of: network_selection, authentication, association, key_exchange, dhcp, dns,
+success, or undetermined (data frames are encrypted and no key was given, so DHCP/DNS cannot be
+seen). Stages are listed in the order a join goes through them.
 
 Reading the pcap (pyshark) is kept apart from the decision logic (`classify`), which works on
 plain `Frame` records so it can be tested without tshark.
@@ -16,7 +17,8 @@ import json
 import sys
 from dataclasses import asdict, dataclass, field
 
-STAGES = ("association", "authentication", "key_exchange", "dhcp", "dns", "success", "undetermined")
+STAGES = ("network_selection", "authentication", "association", "key_exchange", "dhcp", "dns", "success",
+          "undetermined")
 
 AUTH_ALG = {0: "Open System", 1: "Shared Key", 2: "FT", 3: "SAE"}
 # Status codes that do not end an attempt: success, SAE anti-clogging token, SAE H2E.
@@ -120,7 +122,7 @@ def guess_sta(frames: list[Frame]) -> str | None:
 def classify(frames: list[Frame], sta: str | None = None) -> Result:
     sta = (sta or guess_sta(frames) or "").lower() or None
     if not sta:
-        return Result("association", None, None, "no client activity found in capture")
+        return Result("network_selection", None, None, "no client activity found in capture")
 
     def mine(f: Frame) -> bool:
         if f.kind == "dhcp":
@@ -137,19 +139,22 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
         ev = sorted({f.no: f for f in evidence + deauths}.values(), key=lambda f: f.no)
         return Result(stage, sta, bssid, summary, ev[-12:], notes or [])
 
-    # 1. Authentication (Open System or SAE commit/confirm) -------------------------------
+    # 1. Network selection: the client never chose this BSS --------------------------------
     auth = [f for f in fs if f.kind == "auth"]
     assoc_reqs = [f for f in from_sta if f.kind in ("assoc_req", "reassoc_req")]
     if not auth and not assoc_reqs:
         probes = [f for f in fs if f.kind in ("probe_req", "probe_resp")]
         return result(
-            "association",
+            "network_selection",
             "client never attempted authentication or association",
             probes[-4:],
             ["The client scanned but rejected the network during selection. Typical causes: "
              "no AKM in common (e.g. WPA2-only client, WPA3-only AP) or PMF required by one "
-             "side and unsupported by the other. Check the RSN IE in the probe response."],
+             "side and unsupported by the other. Check the RSN IE in the probe response. "
+             "(If the client does send an Association Request and the AP rejects it, e.g. "
+             "status 31, that is an association failure instead.)"],
         )
+    # 2. Authentication (Open System or SAE commit/confirm) -------------------------------
     if auth:
         ap_auth = [f for f in auth if f.dst == sta]
         sae = any(f.auth_alg == 3 for f in auth)
@@ -172,7 +177,7 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
                 why = "no authentication response from the AP"
             return result("authentication", why, auth)
 
-    # 2. Association ----------------------------------------------------------------------
+    # 3. Association ----------------------------------------------------------------------
     assoc_resps = [f for f in to_sta if f.kind in ("assoc_resp", "reassoc_resp")]
     if not any(f.status == 0 for f in assoc_resps):
         if assoc_resps:
@@ -183,7 +188,7 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
             why = "authenticated but never sent an association request"
         return result("association", why, assoc_reqs + assoc_resps)
 
-    # 3. 4-way handshake ------------------------------------------------------------------
+    # 4. 4-way handshake ------------------------------------------------------------------
     eapol = [f for f in fs if f.kind == "eapol"]
     rsn = bool(eapol) or any(f.rsn for f in assoc_reqs)
     if rsn:
@@ -199,7 +204,7 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
             notes = [f"deauth/disassoc reason codes: {reasons}"] if reasons else []
             return result("key_exchange", why, eapol, notes)
 
-    # 4. DHCP -----------------------------------------------------------------------------
+    # 5. DHCP -----------------------------------------------------------------------------
     dhcp = [f for f in fs if f.kind == "dhcp"]
     types = {f.dhcp_type for f in dhcp}
     if 5 not in types:
@@ -217,7 +222,7 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
             why = "DHCP Offer received but no ACK"
         return result("dhcp", why, dhcp)
 
-    # 5. DNS ------------------------------------------------------------------------------
+    # 6. DNS ------------------------------------------------------------------------------
     dns = [f for f in fs if f.kind == "dns"]
     queries = [f for f in dns if f.src == sta and not f.dns_response]
     answers = [f for f in dns if f.dst == sta and f.dns_response]

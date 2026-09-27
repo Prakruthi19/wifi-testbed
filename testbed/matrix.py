@@ -122,13 +122,13 @@ def expected(ap: ApConfig, client: ClientProfile) -> Expectation:
     supports_sae = "SAE" in client.key_mgmt.split()
     supports_psk = "WPA-PSK" in client.key_mgmt.split()
     if ap.security == "wpa3" and not supports_sae:
-        return Expectation("fail", "association",
+        return Expectation("fail", "network_selection",
                            "WPA2-only client has no AKM in common with a WPA3-only AP")
     if ap.pmf == 2 and client.ieee80211w == 0:
-        return Expectation("fail", "association",
+        return Expectation("fail", "network_selection",
                            "AP requires PMF; client does not support it")
     if ap.security in ("wpa2", "transition") and not supports_psk and not supports_sae:
-        return Expectation("fail", "association", "no common AKM")
+        return Expectation("fail", "network_selection", "no common AKM")
     return Expectation("pass", reason="compatible AKM and PMF settings")
 
 
