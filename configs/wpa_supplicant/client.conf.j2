@@ -19,4 +19,7 @@ network={
 {% if sae_password %}
     sae_password="{{ sae_password }}"
 {% endif %}
+{% if freq_list is defined and freq_list %}
+    freq_list={{ freq_list }}
+{% endif %}
 }

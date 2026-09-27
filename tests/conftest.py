@@ -29,6 +29,8 @@ def pytest_addoption(parser):
     g = parser.getgroup("testbed")
     g.addoption("--repeats", type=int, default=5, help="joins per matrix case (default 5)")
     g.addoption("--channels", default=None, help="comma-separated channel subset, e.g. 6,36")
+    g.addoption("--attenuator", default=None,
+                help="programmable attenuator base URL for -m rf (real RF setup only)")
     g.addoption("--android-serial", default=None, help="adb serial (default: only device)")
     g.addoption("--android-ping-host", default="8.8.8.8", help="host pinged from the emulator")
     g.addoption("--android-ssid", default=None,
