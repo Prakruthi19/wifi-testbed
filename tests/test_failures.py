@@ -53,8 +53,10 @@ CASES = [
                 ("network_selection",)),
     FailureCase("pmf_mismatch", wpa2(pmf=2),
                 {"key_mgmt": "WPA-PSK", "ieee80211w": 0, "psk": PASS}, ("network_selection",)),
+    # First run (2026-09-27): hostapd sent the denied client no Probe Response and the client
+    # sent no Authentication, so it never picked the network. See docs/failure-signatures.md.
     FailureCase("mac_blocked", wpa2(),
-                {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS}, ("authentication",),
+                {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS}, ("network_selection",),
                 deny_client=True),
     FailureCase("dhcp_server_down", wpa2(),
                 {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS}, ("dhcp",), dhcp=False),

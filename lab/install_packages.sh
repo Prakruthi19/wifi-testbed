@@ -6,7 +6,7 @@ cd "$(dirname "$0")/.."
 sudo apt-get update
 sudo DEBIAN_FRONTEND=noninteractive apt-get install -y \
   hostapd wpasupplicant iw iproute2 dnsmasq tshark wireshark \
-  isc-dhcp-client bind9-dnsutils netcat-openbsd nftables \
+  isc-dhcp-client bind9-dnsutils netcat-openbsd nftables iperf3 \
   python3-venv "linux-modules-extra-$(uname -r)"
 
 # The distro services would grab the radios / port 53 on their own; the tests start them.
