@@ -64,3 +64,72 @@ def test_dhcp_timeout_means_no_lease(tmp_path, monkeypatch):
     ip, elapsed = client.dhcp(timeout=1)
     assert ip is None and elapsed >= 0
     assert not (tmp_path / "dhclient.leases").exists(), "stale lease was not cleared"
+
+
+def test_mac_randomization_parsing():
+    from testbed.android import is_randomized_mac, parse_wifi_mac
+
+    text = ' mWifiInfo SSID: "AndroidWifi", BSSID: 00:13:10:85:fe:01, MAC: 02:15:B2:00:00:00, IP: /10.0.2.16'
+    assert parse_wifi_mac(text) == "02:15:b2:00:00:00"
+    assert is_randomized_mac("02:15:b2:00:00:00") and is_randomized_mac("da:a1:19:00:00:01")
+    assert not is_randomized_mac("00:13:10:85:fe:01")
+
+
+def test_parse_signal_poll():
+    from testbed.client import parse_signal_poll
+
+    text = "RSSI=-52\nLINKSPEED=866\nNOISE=9999\nFREQUENCY=5180\n"
+    assert parse_signal_poll(text) == {"rssi_dbm": -52, "link_mbps": 866.0, "freq_mhz": 5180}
+    assert parse_signal_poll("FAIL") == {}
+
+
+def test_openwrt_uci_commands():
+    from testbed.matrix import ApConfig
+    from testbed.openwrt import OpenWrtAP
+
+    cmds = OpenWrtAP("192.168.1.1").uci_commands(
+        ApConfig("wpa3", 2, 36, ssid="lab wpa3", passphrase="labpassword123"))
+    assert "uci set wireless.radio0.band=5g" in cmds
+    assert "uci set wireless.radio0.channel=36" in cmds
+    assert "uci set wireless.default_radio0.ssid='lab wpa3'" in cmds
+    assert "uci set wireless.default_radio0.encryption=sae" in cmds
+    assert "uci set wireless.default_radio0.ieee80211w=2" in cmds
+    assert cmds[-2:] == ["uci commit wireless", "wifi reload"]
+    open_cmds = OpenWrtAP("h").uci_commands(ApConfig("open", 0, 6, ssid="o", passphrase=None))
+    assert "uci set wireless.default_radio0.encryption=none" in open_cmds
+    assert not any(".key=" in c for c in open_cmds)
+
+
+def test_attenuator(monkeypatch):
+    import pytest
+
+    from testbed.attenuator import AttenuatorError, HttpAttenuator, rvr_steps
+
+    assert rvr_steps(0, 20, 5) == [0, 5, 10, 15, 20]
+    att = HttpAttenuator("http://att")
+    calls = []
+    monkeypatch.setattr(att, "_get", lambda path: calls.append(path) or "1")
+    att.set(30)
+    assert calls == ["SETATT=30"]
+    with pytest.raises(AttenuatorError):
+        att.set(120)
+    monkeypatch.setattr(att, "_get", lambda path: "0")
+    with pytest.raises(AttenuatorError):
+        att.set(10)
+
+
+def test_bug_draft(tmp_path):
+    from testbed.bug_draft import draft
+
+    d = tmp_path / "test_induced_failure_mac_blocked_"
+    d.mkdir()
+    (d / "classification.json").write_text(json.dumps({
+        "case": "mac_blocked", "expected": ["authentication"],
+        "join": {"passed": False, "failed_stage": "network_selection"},
+        "classifier": {"stage": "network_selection", "summary": "client never attempted auth",
+                       "evidence": [{"no": 191, "kind": "probe_req", "src": "02:00:00:00:01:00",
+                                     "dst": "ff:ff:ff:ff:ff:ff", "status": None, "reason": None}]}}))
+    (d / "capture.pcap").write_bytes(b"")
+    text = draft(d)
+    assert text.startswith("# mac_blocked: classifier says network_selection, expected authentication")
+    assert '-k "mac_blocked"' in text and "frame #191 probe_req" in text and "capture.pcap" in text

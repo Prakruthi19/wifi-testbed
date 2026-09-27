@@ -19,6 +19,13 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | 3. VLAN segmentation | 3 SSIDs -> 3 VLANs, nftables isolation tests | `-m vlan` |
 | 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network; join a named network by command, wrong password named by stage from logcat, bugreport on failure | `-m android` (host) |
 | Performance | iperf3 TCP uplink/downlink after a full join (WPA2 ch6, WPA3 ch36) | `-m perf` |
+| Smart-home behaviours | recovery after router reboot, old password after a password change, 2.4 GHz-only device vs 5 GHz AP | `-m smarthome` |
+| Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
+
+Designed, not run (no hardware yet): `testbed/openwrt.py` (configure a real OpenWrt AP from the
+same `ApConfig`), `testbed/attenuator.py` + `tests/test_rvr.py`, `lab/monitor_capture.sh`
+(over-the-air capture with a monitor-mode USB adapter). Bug reports: `python -m testbed.bug_draft
+reports/artifacts/<test>` drafts one from a failed test's artifacts.
 
 See [docs/test-plan.md](docs/test-plan.md) for the matrix and expected results,
 [docs/failure-signatures.md](docs/failure-signatures.md) for the failure catalog, and
@@ -92,6 +99,7 @@ $PYTEST -m matrix --channels 6,36 --repeats 2   # quick subset
 $PYTEST -m failures                      # Module 2
 $PYTEST -m vlan                          # Module 3
 $PYTEST -m perf                          # iperf3 throughput
+$PYTEST -m smarthome                     # IoT device behaviours
 ```
 
 Every run writes `reports/junit.xml`, `reports/report.html` (with the connectivity matrix in the

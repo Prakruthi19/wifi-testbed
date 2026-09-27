@@ -13,7 +13,8 @@ import time
 
 import pytest
 
-from testbed.android import Adb, parse_wifi_info, phone_join_stage
+from testbed.android import (Adb, is_randomized_mac, parse_wifi_info, parse_wifi_mac,
+                             phone_join_stage)
 from testbed.util import wait_for
 
 pytestmark = pytest.mark.android
@@ -57,6 +58,9 @@ def evidence(request, adb, artifacts, attach):
         path = artifacts / "logcat-wifi.txt"
         path.write_text(adb.logcat_wifi())
         attach(path, "logcat (Wi-Fi/connectivity)")
+        adb.open_wifi_settings()
+        time.sleep(1)
+        attach(adb.screenshot(artifacts / "wifi-settings.png"), "screenshot (Wi-Fi settings)")
         if request.config.getoption("--android-bugreport"):
             attach(adb.bugreport(artifacts / "bugreport.zip"), "adb bugreport")
 
@@ -154,3 +158,14 @@ def test_wrong_password_names_stage(adb, target, artifacts, record_property):
     assert stage == WRONG_PASSWORD_STAGE[security], (
         f"phone log says {stage!r}, expected {WRONG_PASSWORD_STAGE[security]!r}; "
         f"see logcat-wrong-password.txt")
+
+
+def test_mac_randomization(adb, ping_host, record_property):
+    """The phone should use a randomized (locally administered) MAC on the network by default."""
+    assert adb.wait_connected(ping_host, timeout=RECONNECT_TIMEOUT_S) is not None, "not connected"
+    mac = parse_wifi_mac(adb.dumpsys_wifi())
+    assert mac, "no MAC in the WifiInfo line of dumpsys wifi"
+    record_property("wifi_mac", mac)
+    record_property("randomized", is_randomized_mac(mac))
+    assert is_randomized_mac(mac), (
+        f"{mac} is a factory (globally unique) MAC; per-network randomization is off")

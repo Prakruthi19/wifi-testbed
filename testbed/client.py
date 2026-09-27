@@ -58,6 +58,19 @@ def supplicant_stage(log_text: str) -> str | None:
     return "key_exchange"
 
 
+def parse_signal_poll(text: str) -> dict:
+    """`wpa_cli signal_poll` -> {"rssi_dbm": -52, "link_mbps": 866.7, "freq_mhz": 5180}."""
+    kv = dict(line.split("=", 1) for line in text.splitlines() if "=" in line)
+    out = {}
+    if kv.get("RSSI", "").lstrip("-").isdigit():
+        out["rssi_dbm"] = int(kv["RSSI"])
+    if "LINKSPEED" in kv:
+        out["link_mbps"] = float(kv["LINKSPEED"])
+    if kv.get("FREQUENCY", "").isdigit():
+        out["freq_mhz"] = int(kv["FREQUENCY"])
+    return out
+
+
 def assoc_time_ms(log_text: str) -> float | None:
     """Time from the first authentication attempt to CTRL-EVENT-CONNECTED (auth + assoc + 4-way)."""
     start, done = _RE_AUTH_START.search(log_text), _RE_CONNECTED.search(log_text)
@@ -102,6 +115,12 @@ class WifiClient:
                        check=False, timeout=5)
         return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
 
+    def signal_poll(self) -> dict:
+        """RSSI and link rate the driver reports now (wpa_cli signal_poll); {} when not connected."""
+        proc = self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, "signal_poll",
+                       check=False, timeout=5)
+        return parse_signal_poll(proc.stdout)
+
     def ipv4(self) -> str | None:
         out = self.sh("ip", "-4", "-o", "addr", "show", "dev", self.iface, check=False).stdout
         m = re.search(r"inet (\d+\.\d+\.\d+\.\d+)", out)
@@ -119,7 +138,8 @@ class WifiClient:
         wait_for(lambda: not self.wpa_status(), timeout=3)
 
     def associate(self, ssid: str, key_mgmt: str, ieee80211w: int = 0, psk: str | None = None,
-                  sae_password: str | None = None, timeout: float = 15) -> tuple[bool, Path]:
+                  sae_password: str | None = None, freq_list: str | None = None,
+                  timeout: float = 15) -> tuple[bool, Path]:
         """Start wpa_supplicant and wait for wpa_state=COMPLETED. Returns (connected, log path)."""
         self.disconnect()
         self.workdir.mkdir(parents=True, exist_ok=True)
@@ -129,7 +149,7 @@ class WifiClient:
         log.unlink(missing_ok=True)
         render("wpa_supplicant/client.conf.j2", conf, ctrl_dir=self.ctrl_dir,
                country_code=self.country_code, ssid=ssid, key_mgmt=key_mgmt,
-               ieee80211w=ieee80211w, psk=psk, sae_password=sae_password)
+               ieee80211w=ieee80211w, psk=psk, sae_password=sae_password, freq_list=freq_list)
         self.sh("wpa_supplicant", "-B", "-D", "nl80211", "-i", self.iface, "-c", str(conf),
                 "-t", "-dd", "-f", str(log))
         connected = bool(wait_for(lambda: self.wpa_status().get("wpa_state") == "COMPLETED",

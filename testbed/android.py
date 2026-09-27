@@ -40,6 +40,21 @@ def parse_wifi_info(text: str) -> WifiInfo | None:
     return None
 
 
+def parse_wifi_mac(text: str) -> str | None:
+    """MAC the phone uses on the current network, from the WifiInfo line of `dumpsys wifi`."""
+    m = re.search(r"\bMAC: ([0-9a-f]{2}(?::[0-9a-f]{2}){5})", text, re.I)
+    return m.group(1).lower() if m else None
+
+
+def is_randomized_mac(mac: str) -> bool:
+    """Locally administered bit (0x02 in the first byte) set: a randomized, not factory, MAC.
+
+    Android 10+ uses a random per-network MAC by default, which breaks MAC allow/deny lists and
+    DHCP reservations keyed on the factory address.
+    """
+    return bool(int(mac.split(":")[0], 16) & 0x02)
+
+
 def parse_wifi_connected(status_text: str) -> str | None:
     """SSID from `cmd wifi status` ("Wifi is connected to "AndroidWifi""), else None."""
     m = re.search(r'Wifi is connected to "?([^"\n]+)"?', status_text)
@@ -191,6 +206,19 @@ class Adb:
     # -- evidence --------------------------------------------------------------------------
     def logcat_clear(self) -> None:
         self.run("logcat", "-c", check=False)
+
+    def screenshot(self, dest: Path) -> Path:
+        """PNG of the phone screen (e.g. the Wi-Fi settings page when a join fails)."""
+        cmd = [self.adb_path] + (["-s", self.serial] if self.serial else []) + [
+            "exec-out", "screencap", "-p"]
+        proc = subprocess.run(cmd, capture_output=True, timeout=30)
+        self.transcript.append(f"$ {shlex.join(cmd)}  [rc={proc.returncode}] {len(proc.stdout)} bytes")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(proc.stdout)
+        return dest
+
+    def open_wifi_settings(self) -> None:
+        self.shell("am start -a android.settings.WIFI_SETTINGS", check=False)
 
     def bugreport(self, dest: Path, timeout: float = 600) -> Path:
         """Full `adb bugreport` zip (logs + system state), the usual attachment for Android bugs."""
