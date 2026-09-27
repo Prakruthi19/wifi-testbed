@@ -29,6 +29,7 @@ part() {
 
 part "1/6  Lab: 4 emulated radios, AP in the root namespace, 3 clients in their own namespaces"
 [[ -e /sys/class/net/hwsim0 ]] || bash lab/setup_lab.sh
+$PY -m testbed.preflight --clean | grep -E "FAIL|stopped|ready|problem" | sed 's/^/  /'
 bash lab/setup_lab.sh --versions
 echo "  root namespace: $(iw dev | awk '/Interface/{print $2}' | xargs) + hwsim0 (capture point)"
 for ns in $(ip netns list | awk '{print $1}' | sort); do

@@ -71,6 +71,20 @@ def parse_signal_poll(text: str) -> dict:
     return out
 
 
+def parse_ping(text: str) -> dict:
+    """`ping` summary -> {"sent", "received", "loss_percent", "rtt_min_ms", "rtt_avg_ms",
+    "rtt_max_ms", "rtt_mdev_ms"}; rtt keys are missing when nothing came back."""
+    out = {}
+    m = re.search(r"(\d+) packets transmitted, (\d+) (?:packets )?received.*?([\d.]+)% packet loss", text)
+    if m:
+        out.update(sent=int(m[1]), received=int(m[2]), loss_percent=float(m[3]))
+    m = re.search(r"= ([\d.]+)/([\d.]+)/([\d.]+)/([\d.]+) ms", text)
+    if m:
+        out.update(rtt_min_ms=float(m[1]), rtt_avg_ms=float(m[2]), rtt_max_ms=float(m[3]),
+                   rtt_mdev_ms=float(m[4]))
+    return out
+
+
 def assoc_time_ms(log_text: str) -> float | None:
     """Time from the first authentication attempt to CTRL-EVENT-CONNECTED (auth + assoc + 4-way)."""
     start, done = _RE_AUTH_START.search(log_text), _RE_CONNECTED.search(log_text)
@@ -183,6 +197,12 @@ class WifiClient:
     def ping(self, target: str, count: int = 3) -> bool:
         return self.sh("ping", "-c", str(count), "-i", "0.2", "-W", "1", target,
                        check=False, timeout=count + 5).returncode == 0
+
+    def ping_stats(self, target: str, count: int = 20, interval: float = 0.2) -> dict:
+        """Latency and loss: round-trip min/avg/max/mdev (mdev is ping's jitter figure)."""
+        proc = self.sh("ping", "-c", str(count), "-i", str(interval), "-W", "1", target,
+                       check=False, timeout=count * interval + 10)
+        return parse_ping(proc.stdout)
 
     def tcp_connect(self, target: str, port: int, timeout: float = 2) -> bool:
         return self.sh("nc", "-z", "-w", str(int(timeout)), target, str(port),

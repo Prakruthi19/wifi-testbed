@@ -56,6 +56,7 @@ class Frame:
     dns_response: bool | None = None
     dns_rcode: int | None = None
     dns_name: str | None = None
+    retry: bool = False  # 802.11 Retry bit: this frame is a retransmission
 
     def describe(self) -> str:
         d = f"#{self.no} {self.kind}"
@@ -119,6 +120,29 @@ def guess_sta(frames: list[Frame]) -> str | None:
     return None
 
 
+def link_events(frames: list[Frame], sta: str) -> dict:
+    """Disconnects and retransmissions involving `sta`, independent of the join verdict.
+
+    disconnects: (frame no, "deauth"/"disassoc", who sent it: "client" or "ap", reason code)
+    retries: frames with the Retry bit set, out of `frames_seen` frames to or from the client.
+    """
+    sta = sta.lower()
+    fs = [f for f in frames if sta in (f.src, f.dst)]
+    disconnects = [(f.no, f.kind, "client" if f.src == sta else "ap", f.reason)
+                   for f in fs if f.kind in ("deauth", "disassoc")]
+    return {"disconnects": disconnects, "retries": sum(f.retry for f in fs), "frames_seen": len(fs)}
+
+
+def link_notes(frames: list[Frame], sta: str) -> list[str]:
+    ev = link_events(frames, sta)
+    notes = [f"{kind} from {who}, reason {reason} (frame #{no})"
+             for no, kind, who, reason in ev["disconnects"]]
+    if ev["retries"]:
+        notes.append(f"retransmissions: {ev['retries']} of {ev['frames_seen']} frames "
+                     f"({100 * ev['retries'] / ev['frames_seen']:.1f}%)")
+    return notes
+
+
 def classify(frames: list[Frame], sta: str | None = None) -> Result:
     sta = (sta or guess_sta(frames) or "").lower() or None
     if not sta:
@@ -137,7 +161,7 @@ def classify(frames: list[Frame], sta: str | None = None) -> Result:
 
     def result(stage: str, summary: str, evidence: list[Frame], notes: list[str] | None = None):
         ev = sorted({f.no: f for f in evidence + deauths}.values(), key=lambda f: f.no)
-        return Result(stage, sta, bssid, summary, ev[-12:], notes or [])
+        return Result(stage, sta, bssid, summary, ev[-12:], (notes or []) + link_notes(fs, sta))
 
     # 1. Network selection: the client never chose this BSS --------------------------------
     auth = [f for f in fs if f.kind == "auth"]
@@ -286,6 +310,7 @@ def frame_from_packet(pkt) -> Frame:
         dst=_mac(_field(pkt, "wlan.da", "wlan.ra")),
         bssid=_mac(_field(pkt, "wlan.bssid")),
         protected=_bool(_field(pkt, "wlan.fc.protected")),
+        retry=_bool(_field(pkt, "wlan.fc.retry")),
     )
     if ftype == 0 and subtype in MGMT_KINDS:
         f.kind = MGMT_KINDS[subtype]
