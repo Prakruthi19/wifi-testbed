@@ -142,6 +142,10 @@ class Adb:
             lambda: self.shell("getprop sys.boot_completed", check=False).strip() == "1",
             timeout=timeout, interval=1))
 
+    def is_emulator(self) -> bool:
+        return self.shell("getprop ro.kernel.qemu", check=False).strip() == "1" or \
+            (self.serial or "").startswith("emulator-")
+
     # -- Wi-Fi -----------------------------------------------------------------------------
     def wifi_status(self) -> str:
         return self.shell("cmd wifi status")

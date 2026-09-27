@@ -109,6 +109,8 @@ def test_state_reporting(adb, ping_host, record_property):
 
 
 def test_degraded_network(adb, ping_host, record_property):
+    if not adb.is_emulator():
+        pytest.skip("network shaping uses the emulator console (adb emu); not on a real phone")
     adb.emu_network(delay="gprs", speed="edge")
     try:
         start = time.monotonic()
