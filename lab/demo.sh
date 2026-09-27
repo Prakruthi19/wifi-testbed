@@ -53,7 +53,7 @@ for case in ("mac_blocked", "dhcp_server_down"):
           f"harness={d['join']['failed_stage']}")
 PYEOF
 
-part "4/6  Throughput after a full join (iperf3; emulated radios, so a software-path baseline)"
+part "4/6  Throughput after a full join (iperf3). VIRTUAL-NETWORK numbers, not real Wi-Fi speed"
 tests -m perf -k "wpa2"
 for dir in "$ART"/test_throughput*wpa2*; do
   $PY -c "import json,sys; r=json.load(open(sys.argv[1]))['iperf']; print(f\"  {r['direction']:9} {r['mbps']:>9} Mbps  retransmits={r['retransmits']}\")" "$dir/iperf.json"

@@ -4,6 +4,10 @@
 
 Keep a copy of a good run's junit.xml as the baseline (e.g. cp -r reports reports/baseline).
 Exit code 1 when anything that passed before fails now.
+
+    .venv/bin/python -m testbed.compare --consistency reports/runs/run-*.xml
+
+lists tests whose outcome changes between repeated runs (see lab/repeat.sh).
 """
 
 from __future__ import annotations
@@ -47,11 +51,30 @@ def compare(before: dict[str, str], after: dict[str, str]) -> dict[str, list]:
     return changes
 
 
+def consistency(runs: list[dict[str, str]]) -> dict[str, list[str]]:
+    """Tests whose outcome differs between repeated runs of the same suite (flaky candidates)."""
+    names = sorted(set().union(*runs)) if runs else []
+    return {n: [r.get(n, "missing") for r in runs] for n in names
+            if len({r.get(n, "missing") for r in runs}) > 1}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     ap.add_argument("before", type=Path)
-    ap.add_argument("after", type=Path)
+    ap.add_argument("after", type=Path, nargs="+",
+                    help="one junit.xml to compare against, or several with --consistency")
+    ap.add_argument("--consistency", action="store_true",
+                    help="treat all files as repeats of one suite and list tests that flip")
     args = ap.parse_args(argv)
+    if args.consistency:
+        runs = [outcomes(p) for p in [args.before, *args.after]]
+        flips = consistency(runs)
+        total = len(set().union(*runs))
+        print(f"{len(runs)} runs, {total} tests, {len(flips)} inconsistent")
+        for name, seq in flips.items():
+            print(f"  {name}  {' '.join(seq)}")
+        return 1 if flips else 0
+    args.after = args.after[0]
     before, after = outcomes(args.before), outcomes(args.after)
     changes = compare(before, after)
     print(f"before: {sum(v == 'passed' for v in before.values())}/{len(before)} passed   "

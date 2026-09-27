@@ -1,8 +1,9 @@
 """Fault injection: break the lab in a controlled way while a client is connected, then check the
 harness detects it, the capture shows it, and the client recovers (or fails at the right stage).
 
-Faults: the AP kicks the client (deauth), the client's wpa_supplicant crashes and restarts, the
-client's link drops for a few seconds, and the AP changes security under a WPA2-only client.
+Faults: the AP kicks the client (deauth), hostapd crashes (SIGKILL) and is restarted, the
+client's wpa_supplicant is stopped or crashes and restarts, the client's link drops for a few
+seconds, and the AP changes security under a WPA2-only client.
 Other faults live elsewhere: AP restart and password change in test_smart_home.py, DHCP and DNS
 off in test_failures.py.
 """
@@ -10,7 +11,10 @@ off in test_failures.py.
 from __future__ import annotations
 
 import json
+import os
+import signal
 import time
+from pathlib import Path
 
 import pytest
 
@@ -67,9 +71,10 @@ def test_ap_kicks_client(connected, hostap, capture, artifacts, record_property)
     assert seconds is not None, f"client did not come back within {RECOVERY_TIMEOUT_S}s"
 
 
-def test_supplicant_restart(connected, capture, artifacts, record_property):
+@pytest.mark.parametrize("sig", ["TERM", "KILL"], ids=["clean-stop", "crash"])
+def test_supplicant_restart(sig, connected, capture, artifacts, record_property):
     client, gw = connected
-    client.sh("pkill", "-f", f"wpa_supplicant.*-i {client.iface}", check=False)
+    client.sh("pkill", f"-{sig}", "-f", f"wpa_supplicant.*-i {client.iface}", check=False)
     assert wait_for(lambda: not client.wpa_status(), timeout=5), "wpa_supplicant still running"
     start = time.monotonic()
     connected_again, log = client.associate(SSID, **CLIENT_PROFILES["wpa3-capable"].network_for(WPA2))
@@ -77,9 +82,29 @@ def test_supplicant_restart(connected, capture, artifacts, record_property):
     ev = capture_events(capture, client, artifacts)
     record_property("disconnects", ev["disconnects"])
     assert connected_again, f"no rejoin after restart; stage {supplicant_stage(log.read_text())}"
-    # A cleanly stopped supplicant says goodbye: Deauthentication from the client, reason 3.
-    assert any(who == "client" for _, _, who, _ in ev["disconnects"]), \
-        f"no Deauthentication/Disassociation from the client in the capture: {ev}"
+    said_goodbye = any(who == "client" for _, _, who, _ in ev["disconnects"])
+    record_property("client_said_goodbye", said_goodbye)
+    if sig == "TERM":
+        # A cleanly stopped supplicant says goodbye: Deauthentication from the client, reason 3.
+        assert said_goodbye, f"no Deauthentication/Disassociation from the client: {ev}"
+    # A crash (KILL) may leave no goodbye; the AP only learns when the client re-authenticates.
+
+
+def test_ap_crash(connected, hostap, artifacts, record_property):
+    """hostapd dies without cleanup (SIGKILL); the harness restarts it and the client must return."""
+    client, gw = connected
+    params = dict(hostap.current)
+    pid = int(hostap.pid_file.read_text().strip())
+    os.kill(pid, signal.SIGKILL)
+    assert wait_for(lambda: not Path(f"/proc/{pid}").exists(), timeout=5), "hostapd survived SIGKILL"
+    # Whether the client notices depends on whether the kernel keeps beaconing for a dead
+    # hostapd; record it rather than guess. The requirement is recovery after the restart.
+    noticed = wait_for(lambda: client.wpa_status().get("wpa_state") != "COMPLETED", timeout=20)
+    record_property("client_noticed_ap_death", bool(noticed))
+    hostap.start(**params)
+    seconds = recovered(client, gw)
+    record_property("recovery_s", seconds)
+    assert seconds is not None, f"client did not come back within {RECOVERY_TIMEOUT_S}s of restart"
 
 
 def test_link_interruption(connected, artifacts, record_property):

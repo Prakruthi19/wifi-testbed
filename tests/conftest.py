@@ -131,7 +131,34 @@ def pytest_html_results_summary(prefix, summary, postfix):
         prefix.append("<h2>Connectivity matrix</h2>" + matrix_html(MATRIX_RESULTS))
 
 
+LAB_DAEMONS = ("hostapd", "wpa_supplicant", "dnsmasq", "dumpcap", "dhclient", "iperf3")
+
+
+def leftover_daemons() -> dict[str, list[str]]:
+    import subprocess
+    out = {}
+    for name in LAB_DAEMONS:
+        pids = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True).stdout.split()
+        if pids:
+            out[name] = pids
+    return out
+
+
 def pytest_sessionfinish(session):
+    # Cleanup check: after lab tests, every daemon the harness started should be gone, even when
+    # tests failed. Anything left is written down so the next run doesn't inherit it silently.
+    ran_lab = any("lab" in item.keywords for item in getattr(session, "items", []))
+    if ran_lab and lab_available() is None:
+        left = leftover_daemons()
+        REPORTS_DIR.mkdir(exist_ok=True)
+        path = REPORTS_DIR / "leftover-processes.txt"
+        if left:
+            path.write_text("".join(f"{k}: {' '.join(v)}\n" for k, v in left.items()))
+            print(f"\nWARNING: lab processes still running after the run: {left} (see {path}; "
+                  f"sudo .venv/bin/python -m testbed.preflight --clean)")
+        else:
+            path.write_text("none\n")
+
     if MATRIX_RESULTS:
         REPORTS_DIR.mkdir(exist_ok=True)
         (REPORTS_DIR / "matrix.html").write_text(

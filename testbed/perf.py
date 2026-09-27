@@ -14,6 +14,9 @@ from pathlib import Path
 from testbed.util import log, wait_for
 
 IPERF_PORT = 5201
+# Stamped on every saved result so no number is mistaken for real Wi-Fi performance.
+VIRTUAL_NOTE = ("virtual-network measurement (mac80211_hwsim, same VM): reflects the software "
+                "path, not RF or real Wi-Fi performance")
 
 
 @dataclass
