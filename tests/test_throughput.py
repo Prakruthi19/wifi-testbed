@@ -22,6 +22,7 @@ SECONDS = 5
 UDP_MBPS = 20
 MAX_LOSS_PERCENT = 5.0
 MAX_JITTER_MS = 30.0
+MAX_AVG_RTT_MS = 50.0
 
 APS = [
     ApConfig("wpa2", 1, 6, ssid="lab-perf", passphrase="labpassword123"),
@@ -86,3 +87,24 @@ def test_udp_jitter_loss(direction, hostap, dnsmasq, clients, inventory, iperf_s
     assert result.error is None, f"iperf3 error: {result.error}"
     assert result.lost_percent <= MAX_LOSS_PERCENT, f"{result.lost_percent}% datagrams lost"
     assert result.jitter_ms <= MAX_JITTER_MS, f"jitter {result.jitter_ms} ms"
+
+
+def test_latency(hostap, dnsmasq, clients, inventory, artifacts, attach, capture,
+                 record_property):
+    ap = APS[0]
+    client = clients["client1"]
+    lab = inventory.lab
+    hostap.ensure(**ap.template_params())
+    try:
+        join = client.join(ap.ssid, CLIENT_PROFILES["wpa3-capable"].network_for(ap),
+                           gateway=lab["gateway"], artifacts=artifacts)
+        assert join.passed, f"join failed at {join.failed_stage}: {join}"
+        stats = client.ping_stats(lab["gateway"], count=20)
+    finally:
+        client.disconnect()
+    (artifacts / "ping.json").write_text(json.dumps(stats, indent=2))
+    attach(artifacts / "ping.json")
+    for key, value in stats.items():
+        record_property(key, value)
+    assert stats.get("loss_percent") == 0.0, f"ping loss: {stats}"
+    assert stats["rtt_avg_ms"] <= MAX_AVG_RTT_MS, f"average RTT {stats['rtt_avg_ms']} ms"

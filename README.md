@@ -18,7 +18,8 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | 2. Capture diagnosis | induces 7 failure types, classifies each pcap by failure stage | `-m failures` |
 | 3. VLAN segmentation | 3 SSIDs -> 3 VLANs, nftables isolation tests | `-m vlan` |
 | 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network; join a named network by command, wrong password named by stage from logcat, bugreport on failure | `-m android` (host) |
-| Performance | iperf3 TCP uplink/downlink after a full join (WPA2 ch6, WPA3 ch36) | `-m perf` |
+| Performance | iperf3 TCP uplink/downlink (WPA2 ch6, WPA3 ch36), UDP jitter/loss, ping latency | `-m perf` |
+| Fault injection | AP kicks the client (deauth), wpa_supplicant crash + restart, link drop, AP switches to WPA3-only under a WPA2-only client | `-m faults` |
 | Smart-home behaviours | recovery after router reboot, old password after a password change, 2.4 GHz-only device vs 5 GHz AP | `-m smarthome` |
 | Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
 
@@ -100,6 +101,10 @@ $PYTEST -m failures                      # Module 2
 $PYTEST -m vlan                          # Module 3
 $PYTEST -m perf                          # iperf3 throughput
 $PYTEST -m smarthome                     # IoT device behaviours
+$PYTEST -m faults                        # fault injection while connected
+
+sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop stray daemons
+.venv/bin/python -m testbed.compare reports/baseline/junit.xml reports/junit.xml  # regressions
 ```
 
 Every run writes `reports/junit.xml`, `reports/report.html` (with the connectivity matrix in the

@@ -152,3 +152,46 @@ def test_openwrt_htmode():
     ap = ApConfig("wpa2", 1, 6, ssid="s", passphrase="labpassword123")
     assert "uci set wireless.radio0.htmode=HT20" in OpenWrtAP("h").uci_commands(ap, "HT20")
     assert not any("htmode" in c for c in OpenWrtAP("h").uci_commands(ap))
+
+
+def test_parse_ping():
+    from testbed.client import parse_ping
+
+    text = ("20 packets transmitted, 20 received, 0% packet loss, time 3805ms\n"
+            "rtt min/avg/max/mdev = 0.041/0.087/0.212/0.036 ms\n")
+    assert parse_ping(text) == {"sent": 20, "received": 20, "loss_percent": 0.0, "rtt_min_ms": 0.041,
+                                "rtt_avg_ms": 0.087, "rtt_max_ms": 0.212, "rtt_mdev_ms": 0.036}
+    lost = parse_ping("3 packets transmitted, 0 received, 100% packet loss, time 2050ms\n")
+    assert lost == {"sent": 3, "received": 0, "loss_percent": 100.0}
+
+
+def test_link_events():
+    from classifier.classify_join import Frame, classify, link_events
+
+    sta, ap = "02:00:00:00:01:00", "02:00:00:00:00:00"
+    frames = [Frame(1, 0.0, "data", sta, ap, ap), Frame(2, 0.1, "data", sta, ap, ap, retry=True),
+              Frame(3, 0.2, "deauth", ap, sta, ap, reason=2),
+              Frame(4, 0.3, "deauth", sta, ap, ap, reason=3)]
+    ev = link_events(frames, sta)
+    assert ev["disconnects"] == [(3, "deauth", "ap", 2), (4, "deauth", "client", 3)]
+    assert (ev["retries"], ev["frames_seen"]) == (1, 4)
+    notes = classify(frames, sta).notes
+    assert "deauth from ap, reason 2 (frame #3)" in notes
+    assert any(n.startswith("retransmissions: 1 of 4") for n in notes)
+
+
+def test_compare_junit(tmp_path):
+    from testbed.compare import compare, outcomes
+
+    def junit(path, cases):
+        body = "".join(f'<testcase classname="t" name="{n}">{x}</testcase>' for n, x in cases)
+        path.write_text(f"<testsuites><testsuite>{body}</testsuite></testsuites>")
+        return path
+
+    before = outcomes(junit(tmp_path / "a.xml", [("ok", ""), ("breaks", ""), ("heals", "<failure/>")]))
+    after = outcomes(junit(tmp_path / "b.xml", [("ok", ""), ("breaks", "<failure/>"), ("heals", ""),
+                                                 ("added", "<skipped/>")]))
+    c = compare(before, after)
+    assert c["regressed"] == [("t::breaks", "passed -> failed")]
+    assert c["fixed"] == [("t::heals", "failed -> passed")]
+    assert c["new"] == [("t::added", "skipped")]
