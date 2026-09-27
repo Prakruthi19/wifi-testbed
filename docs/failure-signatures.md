@@ -100,6 +100,21 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 
 ---
 
+## 8. 802.1X wrong password / untrusted server (tests/test_enterprise.py)
+
+* **Induce:** WPA2-Enterprise AP (hostapd built-in EAP server); client uses the wrong password
+  (EAP-PWD or PEAP-MSCHAPv2), or trusts a different CA than the server certificate's.
+* **Expected stage:** `eap` (after association, before the 4-way handshake)
+* **Expected frames:** Open System auth OK -> association OK -> EAP Request/Response
+  (Identity, then the method) -> EAP-Failure (code 4) from the AP; no EAPOL-Key frames.
+  Untrusted server: TLS exchange inside EAP stops; client log has
+  `CTRL-EVENT-EAP-TLS-CERT-ERROR`.
+* **Filter:** `eap || eapol`
+* **Observed:** _TBD_
+* **Status:** hypothesis
+
+---
+
 ## External validation (Wireshark wiki sample captures)
 
 Run the classifier on public captures so it is not validated only on emulated data.
@@ -113,5 +128,5 @@ python -m classifier.classify_join captures/external/wpa-Induction.pcap --wpa-pw
 | Capture | Ground truth | Classifier output | Correct? | Notes |
 |---|---|---|---|---|
 | wpa-Induction.pcap | successful WPA2-PSK join | _TBD_ | | |
-| wpa-eap-tls.pcap.gz | 802.1X/EAP-TLS join | _TBD_ | | EAP stages are not modelled; expect a gap |
+| wpa-eap-tls.pcap.gz | 802.1X/EAP-TLS join | _TBD_ | | EAP is now modelled (`eap` stage); decrypting needs the PMK, which the sample page may not give |
 | _add more_ | | | | |

@@ -1,0 +1,31 @@
+# Rendered by testbed/roam.py -- one of two APs of the same network, bridged into br-roam so a
+# client keeps its IP address when it moves between them.
+interface={{ iface }}
+bridge={{ bridge }}
+driver=nl80211
+ctrl_interface={{ ctrl_dir }}
+ctrl_interface_group=0
+
+ssid={{ ssid }}
+country_code={{ country_code }}
+ieee80211d=1
+hw_mode=g
+channel={{ channel }}
+ieee80211n=1
+wmm_enabled=1
+
+wpa=2
+rsn_pairwise=CCMP
+ieee80211w=1
+wpa_passphrase={{ passphrase }}
+{% if ft %}
+# 802.11r Fast Transition: both APs share a mobility domain, and derive the FT keys locally from
+# the passphrase (fine for PSK; an enterprise network would exchange keys between APs instead).
+wpa_key_mgmt=WPA-PSK FT-PSK
+mobility_domain={{ mobility_domain }}
+nas_identifier={{ iface }}.lab
+ft_psk_generate_local=1
+ft_over_ds=0
+{% else %}
+wpa_key_mgmt=WPA-PSK
+{% endif %}
