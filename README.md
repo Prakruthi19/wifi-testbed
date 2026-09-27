@@ -21,6 +21,9 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | Performance | iperf3 TCP uplink/downlink (WPA2 ch6, WPA3 ch36), UDP jitter/loss, ping latency | `-m perf` |
 | Fault injection | AP kicks the client (deauth), wpa_supplicant crash + restart, link drop, AP switches to WPA3-only under a WPA2-only client | `-m faults` |
 | Smart-home behaviours | recovery after router reboot, old password after a password change, 2.4 GHz-only device vs 5 GHz AP | `-m smarthome` |
+| Enterprise (802.1X) | username/password login via hostapd's built-in EAP server (EAP-PWD, PEAP-MSCHAPv2): success, wrong password, untrusted server certificate; failures named at the `eap` stage | `-m enterprise` |
+| Roaming | client moves between two APs of one network: full re-auth vs 802.11r Fast Transition; roam time, ping loss, IP kept, auth type and 4-way handshake checked in the capture | `-m roam` (needs `ROAM=1` setup) |
+| WPA3 decryption | WPA3-SAE capture decrypted with the session PMK from the client log (`wpa_supplicant -K`), so the classifier sees DHCP/DNS; the passphrase alone must not work | `-m decrypt` |
 | Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
 
 Designed, not run (no hardware yet): `testbed/openwrt.py` (configure a real OpenWrt AP from the
@@ -102,6 +105,8 @@ $PYTEST -m vlan                          # Module 3
 $PYTEST -m perf                          # iperf3 throughput
 $PYTEST -m smarthome                     # IoT device behaviours
 $PYTEST -m faults                        # fault injection while connected
+$PYTEST -m "enterprise or decrypt"       # 802.1X login, WPA3 capture decryption
+sudo ROAM=1 lab/setup_lab.sh && $PYTEST -m roam   # roaming needs the extra AP radio (ap1)
 
 sudo lab/repeat.sh 3 -m failures         # repeatability: 3 runs, list tests that flip
 sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop stray daemons
@@ -117,6 +122,9 @@ Classify any capture directly:
 ```bash
 .venv/bin/python -m classifier.classify_join reports/artifacts/<test>/capture.pcap \
     --wpa-pwd labpassword123:lab-diag
+# WPA3-SAE / 802.1X: the passphrase is not enough; use that session's PMK from the client log
+.venv/bin/python -m classifier.classify_join capture.pcap \
+    --pmk "$(.venv/bin/python -c 'import sys; from testbed.client import session_pmk; print(session_pmk(open(sys.argv[1]).read()))' wpa_supplicant-client1.log)"
 ```
 
 ### Android (host, not the VM)
@@ -154,6 +162,7 @@ What has actually been run, and where. Update this after every lab run.
 | `tests/unit` | every commit | all pass (no lab needed) |
 | `-m failures` | 2026-09-27, Ubuntu 24.04 VM | 6/8 before the fixes for issues #3-#5; not yet re-run with them |
 | `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
+| `-m enterprise`, `-m decrypt`, `-m roam` | not run yet | written only; the PMK log-line format and hostapd EAP-PWD/FT support on Ubuntu's packages are unconfirmed |
 | `-m android` | not run (no device) | written only |
 | `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
 
@@ -163,7 +172,10 @@ They are stamped as such in every saved result and are not Wi-Fi performance fig
 ## Limitations
 
 * The RF layer is emulated, so the lab has no signal level, interference, or roaming under
-  fading.
+  fading. Roaming here is triggered by command (`wpa_cli roam`), not by the signal getting
+  weaker, so it tests the handover itself, not the client's decision of when to roam.
+* 802.1X uses hostapd's built-in EAP server, not a separate RADIUS server, so AP-to-RADIUS
+  problems (shared secret, server unreachable, timeouts) are not covered.
 * It covers one driver (`mac80211_hwsim`) and one AP/client software stack
   (hostapd/wpa_supplicant).
 * The Android emulator can only join its built-in `AndroidWifi` network, and it runs on the

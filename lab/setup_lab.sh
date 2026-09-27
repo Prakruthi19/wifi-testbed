@@ -3,10 +3,14 @@
 # each in its own namespace ns-clientN so traffic must cross the emulated air and DHCP.
 #
 #   sudo lab/setup_lab.sh             # set up (tears down any previous lab first)
+#   ROAM=1 sudo lab/setup_lab.sh      # also a second AP radio, ap1, for the roaming tests
 #   sudo lab/setup_lab.sh --versions  # print software versions for inventory.yaml
 set -euo pipefail
 
-RADIOS=${RADIOS:-4}
+ROAM=${ROAM:-0}
+if [[ $ROAM == 1 ]]; then RADIOS=${RADIOS:-5}; else RADIOS=${RADIOS:-4}; fi
+# Client radios are 1..LAST_STA; with ROAM=1 the last radio becomes ap1 instead.
+LAST_STA=$((RADIOS - 1 - (ROAM == 1 ? 1 : 0)))
 COUNTRY=${COUNTRY:-US}
 AP_CIDR=${AP_CIDR:-192.168.50.1/24}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -53,8 +57,16 @@ ip link set "${IFACES[0]}" name ap0
 ip addr add "$AP_CIDR" dev ap0
 ip link set ap0 up
 
-# Radios 1..N: one client per namespace. The phy moves with its interface.
-for i in $(seq 1 $((RADIOS - 1))); do
+# Second AP radio for roaming: root namespace, no IP (tests bridge it with ap0).
+if [[ $ROAM == 1 ]]; then
+  ifc=${IFACES[$((RADIOS - 1))]}
+  ip link set "$ifc" down
+  ip link set "$ifc" name ap1
+  ip link set ap1 up
+fi
+
+# Radios 1..LAST_STA: one client per namespace. The phy moves with its interface.
+for i in $(seq 1 "$LAST_STA"); do
   ifc=${IFACES[$i]}
   ns=ns-client$i
   phy=$(cat "/sys/class/net/$ifc/phy80211/name")
@@ -75,7 +87,7 @@ mkdir -p /run/testbed
 
 echo "lab up:"
 iw dev | awk '/Interface/{print "  root: "$2}'
-for i in $(seq 1 $((RADIOS - 1))); do
+for i in $(seq 1 "$LAST_STA"); do
   echo "  ns-client$i: $(ip -n ns-client$i -br link show sta$i)"
 done
 echo "  capture: hwsim0"

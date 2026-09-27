@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import shutil
+import signal
 import statistics
 import subprocess
 import time
@@ -11,15 +12,21 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from testbed.perf import IperfResult, UdpResult, parse_iperf_json, parse_iperf_udp_json
-from testbed.util import render, run, wait_for
+from testbed.util import ns_prefix, render, run, wait_for
 
-STAGES = ("network_selection", "authentication", "association", "key_exchange", "dhcp", "dns", "ping")
+STAGES = ("network_selection", "authentication", "association", "eap", "key_exchange", "dhcp", "dns",
+          "ping")
 
 _TS = r"^(?P<ts>\d+\.\d+): "
 _RE_AUTH_START = re.compile(_TS + r".*Trying to authenticate with", re.M)
 _RE_ASSOC_START = re.compile(_TS + r".*Trying to associate with", re.M)
 _RE_ASSOCIATED = re.compile(_TS + r".*Associated with", re.M)
 _RE_CONNECTED = re.compile(_TS + r".*CTRL-EVENT-CONNECTED", re.M)
+# Written only because wpa_supplicant runs with -K (log keys); without it the bytes are [REMOVED].
+# SAE: WPA3-Personal. "PMK from EAPOL state machine": 802.1X. Last match = current session.
+# Line formats taken from the wpa_supplicant source; check them against a real log.
+_RE_PMK = re.compile(r"(?:SAE: PMK|WPA: PMK from EAPOL state machine) - hexdump\(len=(\d+)\): "
+                     r"((?:[0-9a-f]{2} ?)+)")
 
 
 @dataclass
@@ -46,8 +53,12 @@ def supplicant_stage(log_text: str) -> str | None:
         return "authentication"
     if "CTRL-EVENT-ASSOC-REJECT" in log_text:
         return "association"
+    if "CTRL-EVENT-EAP-FAILURE" in log_text or "CTRL-EVENT-EAP-TLS-CERT-ERROR" in log_text:
+        return "eap"
     if "4-Way Handshake failed" in log_text:
         return "key_exchange"
+    if "CTRL-EVENT-EAP-STARTED" in log_text and "CTRL-EVENT-EAP-SUCCESS" not in log_text:
+        return "eap"  # the login began and never finished (server silent, or client gave up)
     if not _RE_AUTH_START.search(log_text):
         # The supplicant never picked the BSS: no common AKM, PMF mismatch, or not found.
         return "network_selection"
@@ -56,6 +67,20 @@ def supplicant_stage(log_text: str) -> str | None:
     if not _RE_ASSOCIATED.search(log_text):
         return "association"
     return "key_exchange"
+
+
+def session_pmk(log_text: str) -> str | None:
+    """The PMK of the latest WPA3-SAE or 802.1X session, as hex, from a wpa_supplicant -K log.
+
+    WPA2-PSK does not need this (the passphrase + SSID give the PMK). SAE and EAP make a new PMK
+    every session, so the capture can only be decrypted with that session's PMK.
+    """
+    matches = _RE_PMK.findall(log_text)
+    if not matches:
+        return None
+    length, hexbytes = matches[-1]
+    pmk = hexbytes.replace(" ", "")
+    return pmk if len(pmk) == 2 * int(length) else None
 
 
 def parse_signal_poll(text: str) -> dict:
@@ -124,10 +149,13 @@ class WifiClient:
     def mac(self) -> str:
         return self.sh("cat", f"/sys/class/net/{self.iface}/address").stdout.strip()
 
+    def wpa_cli(self, *args: str, timeout: float = 5) -> str:
+        return self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, *args,
+                       check=False, timeout=timeout).stdout
+
     def wpa_status(self) -> dict[str, str]:
-        proc = self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, "status",
-                       check=False, timeout=5)
-        return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
+        out = self.wpa_cli("status")
+        return dict(line.split("=", 1) for line in out.splitlines() if "=" in line)
 
     def signal_poll(self) -> dict:
         """RSSI and link rate the driver reports now (wpa_cli signal_poll); {} when not connected."""
@@ -153,8 +181,12 @@ class WifiClient:
 
     def associate(self, ssid: str, key_mgmt: str, ieee80211w: int = 0, psk: str | None = None,
                   sae_password: str | None = None, freq_list: str | None = None,
-                  timeout: float = 15) -> tuple[bool, Path]:
-        """Start wpa_supplicant and wait for wpa_state=COMPLETED. Returns (connected, log path)."""
+                  eap: dict | None = None, timeout: float = 15) -> tuple[bool, Path]:
+        """Start wpa_supplicant and wait for wpa_state=COMPLETED. Returns (connected, log path).
+
+        eap: 802.1X settings for key_mgmt=WPA-EAP, see testbed.eap.client_settings.
+        The log includes key material (-K) so WPA3/802.1X captures can be decrypted afterwards.
+        """
         self.disconnect()
         self.workdir.mkdir(parents=True, exist_ok=True)
         self.ctrl_dir.mkdir(parents=True, exist_ok=True)
@@ -163,12 +195,47 @@ class WifiClient:
         log.unlink(missing_ok=True)
         render("wpa_supplicant/client.conf.j2", conf, ctrl_dir=self.ctrl_dir,
                country_code=self.country_code, ssid=ssid, key_mgmt=key_mgmt,
-               ieee80211w=ieee80211w, psk=psk, sae_password=sae_password, freq_list=freq_list)
+               ieee80211w=ieee80211w, psk=psk, sae_password=sae_password, freq_list=freq_list,
+               eap=eap)
         self.sh("wpa_supplicant", "-B", "-D", "nl80211", "-i", self.iface, "-c", str(conf),
-                "-t", "-dd", "-f", str(log))
+                "-t", "-dd", "-K", "-f", str(log))
         connected = bool(wait_for(lambda: self.wpa_status().get("wpa_state") == "COMPLETED",
                                   timeout=timeout, interval=0.05))
         return connected, log
+
+    # -- roaming -----------------------------------------------------------------------------
+    def current_bssid(self) -> str | None:
+        status = self.wpa_status()
+        return status.get("bssid") if status.get("wpa_state") == "COMPLETED" else None
+
+    def scan_for(self, bssid: str, timeout: float = 10) -> bool:
+        """Scan until `bssid` shows up in the scan results; roaming needs the target scanned."""
+        self.wpa_cli("scan")
+        return bool(wait_for(lambda: bssid.lower() in self.wpa_cli("scan_results").lower(),
+                             timeout=timeout, interval=0.5))
+
+    def roam(self, bssid: str, timeout: float = 10) -> bool:
+        """Move to another AP of the same network (`wpa_cli roam`). With FT-PSK in key_mgmt and
+        802.11r on the APs this is a Fast Transition; otherwise a full re-authentication."""
+        self.wpa_cli("roam", bssid)
+        return bool(wait_for(lambda: (self.current_bssid() or "").lower() == bssid.lower(),
+                             timeout=timeout, interval=0.02))
+
+    def start_ping(self, target: str, interval: float = 0.05) -> subprocess.Popen:
+        """Background ping (root allows intervals under 0.2 s); stop it with stop_ping."""
+        return subprocess.Popen(ns_prefix(self.namespace) + ["ping", "-i", str(interval), "-W", "1",
+                                                             target],
+                                stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True)
+
+    @staticmethod
+    def stop_ping(proc: subprocess.Popen) -> dict:
+        proc.send_signal(signal.SIGINT)  # ping prints its summary on Ctrl-C
+        try:
+            out, _ = proc.communicate(timeout=5)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+        return parse_ping(out)
 
     def dhcp(self, timeout: float = 10) -> tuple[str | None, float]:
         conf = self.workdir / "dhclient.conf"

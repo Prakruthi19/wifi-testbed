@@ -18,7 +18,7 @@ from pathlib import Path
 from testbed import inventory as inv
 
 TOOLS = ["hostapd", "hostapd_cli", "wpa_supplicant", "wpa_cli", "dnsmasq", "dumpcap", "tshark",
-         "dhclient", "dig", "iw", "ip", "nc", "iperf3"]
+         "dhclient", "dig", "iw", "ip", "nc", "iperf3", "openssl"]
 DAEMONS = ["hostapd", "wpa_supplicant", "dnsmasq", "dumpcap", "dhclient", "iperf3"]
 
 

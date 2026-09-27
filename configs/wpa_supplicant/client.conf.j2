@@ -19,6 +19,20 @@ network={
 {% if sae_password %}
     sae_password="{{ sae_password }}"
 {% endif %}
+{% if eap is defined and eap %}
+    eap={{ eap.method }}
+    identity="{{ eap.identity }}"
+    password="{{ eap.password }}"
+{% if eap.get("anonymous_identity") %}
+    anonymous_identity="{{ eap.anonymous_identity }}"
+{% endif %}
+{% if eap.get("phase2") %}
+    phase2="{{ eap.phase2 }}"
+{% endif %}
+{% if eap.get("ca_cert") %}
+    ca_cert="{{ eap.ca_cert }}"
+{% endif %}
+{% endif %}
 {% if freq_list is defined and freq_list %}
     freq_list={{ freq_list }}
 {% endif %}
