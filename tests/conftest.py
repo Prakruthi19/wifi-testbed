@@ -21,6 +21,7 @@ from testbed.report import matrix_html
 ARTIFACTS_DIR = REPORTS_DIR / "artifacts"
 ATTACHMENTS = pytest.StashKey[list]()
 MATRIX_RESULTS: list[dict] = []
+RUN_RESULTS: list[dict] = []  # every test's verdict this session, for reports/dashboard.html
 
 
 # -- options & collection ------------------------------------------------------------------
@@ -116,6 +117,11 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_runtest_logreport(report):
+    from testbed.dashboard import record
+
+    entry = record(report)
+    if entry:
+        RUN_RESULTS.append(entry)
     if report.when == "call":
         props = dict(report.user_properties)
         if "matrix_row" in props:
@@ -166,6 +172,20 @@ def pytest_sessionfinish(session):
             "<body style='font-family:sans-serif'><h1>Connectivity matrix</h1>"
             + matrix_html(MATRIX_RESULTS) + "</body>")
 
+    # Dashboard: only when some lab test actually ran, so unit-only runs (and CI) leave it alone.
+    if any(r["suite"] != "unit" and r["outcome"] != "skipped" for r in RUN_RESULTS):
+        from testbed import dashboard
+
+        dashboard.save_run(RUN_RESULTS)
+        page = dashboard.write()
+        if os.geteuid() == 0:
+            # Tests run as root; let the normal user open the page, pcaps and logs.
+            for p in [REPORTS_DIR, *REPORTS_DIR.rglob("*")]:
+                try:
+                    p.chmod(p.stat().st_mode | (0o555 if p.is_dir() else 0o444))
+                except OSError:
+                    pass
+        print(f"\ndashboard: {page}")
 
 # -- lab fixtures --------------------------------------------------------------------------
 

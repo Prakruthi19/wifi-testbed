@@ -65,11 +65,11 @@ echo "  What the device's own log said after the change:"
 grep -E "4-Way Handshake failed|WRONG_KEY|CTRL-EVENT-DISCONNECTED" \
   "$ART/test_password_change/supplicant-after-change.log" | head -3 | cut -c1-110 | sed 's/^/    /'
 
-part "6/6  Evidence: HTML report, per-test pcap + logs, and a drafted bug report"
+part "6/6  Evidence: results dashboard, per-test pcap + logs, and a drafted bug report"
 ls "$ART/test_induced_failure_wrong_passphrase_wpa2_/" | sed 's/^/    /'
 $PY -m testbed.bug_draft "$ART/test_induced_failure_wrong_passphrase_wpa2_" | head -16 | sed 's/^/    /'
 chmod -R a+rX reports 2>/dev/null
 echo
 echo "  Reports (one per part):"
 ls reports/demo-*.html | sed 's/^/    /'
-echo "  Open as your user, not root: xdg-open reports/demo-2.html"
+echo "  One-page summary of every run so far: xdg-open reports/dashboard.html  (as your user)"
