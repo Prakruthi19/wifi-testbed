@@ -23,6 +23,7 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | Smart-home behaviours | recovery after router reboot, old password after a password change, 2.4 GHz-only device vs 5 GHz AP | `-m smarthome` |
 | Enterprise (802.1X) | username/password login via hostapd's built-in EAP server (EAP-PWD, PEAP-MSCHAPv2): success, wrong password, untrusted server certificate; failures named at the `eap` stage | `-m enterprise` |
 | Roaming | client moves between two APs of one network: full re-auth vs 802.11r Fast Transition; roam time, ping loss, IP kept, auth type and 4-way handshake checked in the capture | `-m roam` (needs `ROAM=1` setup) |
+| Home network | main router + 2 mesh points (one Wi-Fi name, bridged) and 5 device types (phone, laptop, camera, plug, speaker): everyone joins at once, mesh walk, mesh point switched off, interop (device x WPA2/WPA3/mixed/5 GHz, expected results written first, capture cross-check), busy house (download + camera stream + ping delay), 7 troubleshooting cases that break one thing, check the plain-words diagnosis, fix it and rejoin | `-m home` (needs `HOMENET=1` setup) |
 | WPA3 decryption | WPA3-SAE capture decrypted with the session PMK from the client log (`wpa_supplicant -K`), so the classifier sees DHCP/DNS; the passphrase alone must not work | `-m decrypt` |
 | Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
 
@@ -107,6 +108,9 @@ $PYTEST -m smarthome                     # IoT device behaviours
 $PYTEST -m faults                        # fault injection while connected
 $PYTEST -m "enterprise or decrypt"       # 802.1X login, WPA3 capture decryption
 sudo ROAM=1 lab/setup_lab.sh && $PYTEST -m roam   # roaming needs the extra AP radio (ap1)
+sudo HOMENET=1 lab/setup_lab.sh && $PYTEST -m home # home network: ap1, ap2, sta1..sta5
+                                         # (also runs every other suite, roam included)
+.venv/bin/python -m testbed.home --plan  # expected interop results, before running
 
 sudo lab/repeat.sh 3 -m failures         # repeatability: 3 runs, list tests that flip
 sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop stray daemons
@@ -169,6 +173,7 @@ What has actually been run, and where. Update this after every lab run.
 | `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
 | `-m enterprise`, `-m decrypt`, `-m roam` | 2026-09-28, Ubuntu 24.04 VM | 8/8 pass after three fixes found by the first run (802.1X PMK log line, leftover dhclient, stale scan entry before an FT roam). FT roam 57 ms vs full re-auth 159 ms (from the client log; virtual radios) |
 | `-m "failures or enterprise or decrypt or roam"` (one combined run) | 2026-09-28, Ubuntu 24.04 VM | 16/16 pass. An earlier combined run failed 5 tests because a client radio stayed busy (scan EBUSY) after the mac_blocked case; fixed by resetting the client interface on disconnect |
+| `-m home` | not run yet | written only (2026-09-28); unit tests for its diagnosis and expectations pass |
 | `-m android` | not run (no device) | written only |
 | `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
 
@@ -180,6 +185,9 @@ They are stamped as such in every saved result and are not Wi-Fi performance fig
 * The RF layer is emulated, so the lab has no signal level, interference, or roaming under
   fading. Roaming here is triggered by command (`wpa_cli roam`), not by the signal getting
   weaker, so it tests the handover itself, not the client's decision of when to roam.
+* The home network's mesh points share one bridge, like mesh units with an Ethernet backhaul;
+  the wireless link between real mesh units is not emulated, and each fake radio runs one band
+  at a time (a real router runs 2.4 and 5 GHz together).
 * 802.1X uses hostapd's built-in EAP server, not a separate RADIUS server, so AP-to-RADIUS
   problems (shared secret, server unreachable, timeouts) are not covered.
 * It covers one driver (`mac80211_hwsim`) and one AP/client software stack

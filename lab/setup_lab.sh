@@ -3,14 +3,20 @@
 # each in its own namespace ns-clientN so traffic must cross the emulated air and DHCP.
 #
 #   sudo lab/setup_lab.sh             # set up (tears down any previous lab first)
-#   ROAM=1 sudo lab/setup_lab.sh      # also a second AP radio, ap1, for the roaming tests
+#   sudo ROAM=1 lab/setup_lab.sh      # also a second AP radio, ap1, for the roaming tests
+#   sudo HOMENET=1 lab/setup_lab.sh   # home network: ap0 + mesh points ap1, ap2, and five
+#                                     # device radios sta1..sta5 (a superset of ROAM=1)
 #   sudo lab/setup_lab.sh --versions  # print software versions for inventory.yaml
 set -euo pipefail
 
 ROAM=${ROAM:-0}
-if [[ $ROAM == 1 ]]; then RADIOS=${RADIOS:-5}; else RADIOS=${RADIOS:-4}; fi
-# Client radios are 1..LAST_STA; with ROAM=1 the last radio becomes ap1 instead.
-LAST_STA=$((RADIOS - 1 - (ROAM == 1 ? 1 : 0)))
+HOMENET=${HOMENET:-0}
+STAS=3        # client radios sta1..staN
+EXTRA_APS=0   # AP radios besides ap0: ap1..apN, taken from the last radios
+if [[ $ROAM == 1 ]]; then EXTRA_APS=1; fi
+if [[ $HOMENET == 1 ]]; then STAS=5; EXTRA_APS=2; fi
+RADIOS=${RADIOS:-$((1 + STAS + EXTRA_APS))}
+LAST_STA=$((RADIOS - 1 - EXTRA_APS))
 COUNTRY=${COUNTRY:-US}
 AP_CIDR=${AP_CIDR:-192.168.50.1/24}
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -57,13 +63,14 @@ ip link set "${IFACES[0]}" name ap0
 ip addr add "$AP_CIDR" dev ap0
 ip link set ap0 up
 
-# Second AP radio for roaming: root namespace, no IP (tests bridge it with ap0).
-if [[ $ROAM == 1 ]]; then
-  ifc=${IFACES[$((RADIOS - 1))]}
+# Extra AP radios (roaming: ap1; home network: ap1, ap2 as mesh points). Root namespace, no IP:
+# the tests bridge them with ap0 so every AP serves one network.
+for j in $(seq 1 "$EXTRA_APS"); do
+  ifc=${IFACES[$((LAST_STA + j))]}
   ip link set "$ifc" down
-  ip link set "$ifc" name ap1
-  ip link set ap1 up
-fi
+  ip link set "$ifc" name "ap$j"
+  ip link set "ap$j" up
+done
 
 # Radios 1..LAST_STA: one client per namespace. The phy moves with its interface.
 for i in $(seq 1 "$LAST_STA"); do
