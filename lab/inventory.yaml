@@ -50,6 +50,24 @@ vlans:
   - {ssid: lab-iot,  vlan: 30, subnet: 10.10.30.0/24, gateway: 10.10.30.1,
      dhcp_range: [10.10.30.100, 10.10.30.199], passphrase: iotpassword12, isolatable: true}
 
+# Home network (pytest -m home, needs `sudo HOMENET=1 lab/setup_lab.sh`): a main router and two
+# mesh points with one Wi-Fi name, bridged into one network, and five kinds of home devices.
+# profile: what security the device supports (testbed/matrix.py CLIENT_PROFILES).
+# bands: radios the device has; most cheap smart-home devices only have 2.4 GHz.
+home:
+  ssid: lab-home
+  passphrase: labpassword123
+  access_points:
+    - {name: router,       iface: ap0, channel: 6}
+    - {name: mesh-living,  iface: ap1, channel: 1}
+    - {name: mesh-bedroom, iface: ap2, channel: 11}
+  devices:
+    - {name: phone,   iface: sta1, namespace: ns-client1, profile: wpa3-capable, bands: ["2.4", "5"]}
+    - {name: laptop,  iface: sta2, namespace: ns-client2, profile: wpa3-capable, bands: ["2.4", "5"]}
+    - {name: camera,  iface: sta3, namespace: ns-client3, profile: wpa2-only,    bands: ["2.4"]}
+    - {name: plug,    iface: sta4, namespace: ns-client4, profile: wpa2-only,    bands: ["2.4"]}
+    - {name: speaker, iface: sta5, namespace: ns-client5, profile: wpa3-capable, bands: ["2.4"]}
+
 # Software versions under test. Fill in from `lab/setup_lab.sh --versions` on your VM so every
 # report can be tied to exact builds.
 software:

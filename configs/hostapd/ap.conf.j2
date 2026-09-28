@@ -1,5 +1,9 @@
 # Rendered by testbed/ap.py -- single-BSS AP for Modules 1 and 2.
 interface={{ iface }}
+{% if bridge is defined and bridge %}
+# Home network: every AP is bridged into one network, so a device keeps its address.
+bridge={{ bridge }}
+{% endif %}
 driver=nl80211
 ctrl_interface={{ ctrl_dir }}
 ctrl_interface_group=0
