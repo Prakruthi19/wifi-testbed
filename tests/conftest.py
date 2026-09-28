@@ -178,14 +178,23 @@ def pytest_sessionfinish(session):
 
         dashboard.save_run(RUN_RESULTS)
         page = dashboard.write()
-        if os.geteuid() == 0:
-            # Tests run as root; let the normal user open the page, pcaps and logs.
-            for p in [REPORTS_DIR, *REPORTS_DIR.rglob("*")]:
-                try:
-                    p.chmod(p.stat().st_mode | (0o555 if p.is_dir() else 0o444))
-                except OSError:
-                    pass
         print(f"\ndashboard: {page}")
+
+    give_reports_to_sudo_user()
+
+
+def give_reports_to_sudo_user() -> None:
+    """Lab tests run under sudo, so everything they write in reports/ belongs to root. Hand it
+    back to the user who ran sudo, so they can open the dashboard, pcaps and logs without sudo
+    (Ubuntu's snap Firefox refuses files in your home that you don't own)."""
+    uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+    if os.geteuid() != 0 or not uid or not REPORTS_DIR.exists():
+        return
+    for p in [REPORTS_DIR, *REPORTS_DIR.rglob("*")]:
+        try:
+            os.chown(p, int(uid), int(gid or uid), follow_symlinks=False)
+        except OSError:
+            pass
 
 # -- lab fixtures --------------------------------------------------------------------------
 
