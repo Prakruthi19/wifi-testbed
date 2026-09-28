@@ -212,11 +212,24 @@ class WifiClient:
         status = self.wpa_status()
         return status.get("bssid") if status.get("wpa_state") == "COMPLETED" else None
 
-    def scan_for(self, bssid: str, timeout: float = 10) -> bool:
-        """Scan until `bssid` shows up in the scan results; roaming needs the target scanned."""
-        self.wpa_cli("scan")
-        return bool(wait_for(lambda: bssid.lower() in self.wpa_cli("scan_results").lower(),
-                             timeout=timeout, interval=0.5))
+    def scan_for(self, bssid: str, flag: str | None = None, timeout: float = 10) -> bool:
+        """Fresh scan until `bssid` is listed (and its flags contain `flag`, e.g. "FT/PSK").
+
+        Old entries are flushed first: a BSS remembered from an earlier test with other security
+        settings makes the client pick the wrong key management, and the 4-way handshake then
+        fails because the AP's real RSN IE doesn't match the remembered one (seen in the first
+        lab run of test_roam[ft], 2026-09-28).
+        """
+        self.wpa_cli("bss_flush", "0")
+
+        def listed() -> bool:
+            for line in self.wpa_cli("scan_results").lower().splitlines():
+                if line.startswith(bssid.lower()) and (flag is None or flag.lower() in line):
+                    return True
+            self.wpa_cli("scan")
+            return False
+
+        return bool(wait_for(listed, timeout=timeout, interval=1))
 
     def roam(self, bssid: str, timeout: float = 10) -> bool:
         """Move to another AP of the same network (`wpa_cli roam`). With FT-PSK in key_mgmt and
