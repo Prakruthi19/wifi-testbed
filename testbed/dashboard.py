@@ -197,7 +197,8 @@ def _row(r: dict, reports_dir: Path) -> str:
                 facts.setdefault("classifier_stage", c["stage"])
         except (OSError, json.JSONDecodeError, AttributeError):
             pass
-    facts["time"] = f'{r["duration_s"]:g} s'
+    if r.get("duration_s") is not None:
+        facts["time"] = f'{r["duration_s"]:g} s'
     parts.append('<div class="facts">' + "".join(
         f"<span>{e(k)} <b>{e(_fmt(v))}</b></span>" for k, v in facts.items()) + "</div>")
 
