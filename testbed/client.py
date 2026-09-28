@@ -182,6 +182,11 @@ class WifiClient:
         self.sh("pkill", "-f", f"wpa_supplicant.*-i {self.iface}", check=False)
         self.sh("ip", "addr", "flush", "dev", self.iface, check=False)
         wait_for(lambda: not self.wpa_status(), timeout=3)
+        # Reset the radio. In a combined run (2026-09-28) a join stopped mid-authentication
+        # (mac_blocked) left sta1 answering every later scan with EBUSY (-16), so every test
+        # after it "never found the network". Down/up drops any half-finished scan or auth.
+        self.sh("ip", "link", "set", self.iface, "down", check=False)
+        self.sh("ip", "link", "set", self.iface, "up", check=False)
 
     def associate(self, ssid: str, key_mgmt: str, ieee80211w: int = 0, psk: str | None = None,
                   sae_password: str | None = None, freq_list: str | None = None,
