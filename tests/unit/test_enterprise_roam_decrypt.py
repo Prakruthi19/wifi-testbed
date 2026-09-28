@@ -96,6 +96,13 @@ def test_session_pmk_sae_and_eap_last_wins():
     assert session_pmk(log) == new
 
 
+def test_session_pmk_real_8021x_line():
+    # Copied from a real wpa_supplicant log (Ubuntu 24.04 lab run, 2026-09-28).
+    line = ("1790564520.831819: WPA: PMK from EAPOL state machines - hexdump(len=32): 6d 91 35 a7 e8 "
+            "a8 82 a7 2e c7 43 0e 9f 86 c6 5c 88 3b 70 61 0d a2 79 8b eb fd 72 28 d3 30 ca a5")
+    assert session_pmk(line) == "6d9135a7e8a882a72ec7430e9f86c65c883b70610da2798bebfd7228d330caa5"
+
+
 def test_session_pmk_absent_without_key_logging():
     assert session_pmk("2.0: SAE: PMK - hexdump(len=32): [REMOVED]") is None
     assert session_pmk("") is None

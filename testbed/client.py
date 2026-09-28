@@ -23,9 +23,10 @@ _RE_ASSOC_START = re.compile(_TS + r".*Trying to associate with", re.M)
 _RE_ASSOCIATED = re.compile(_TS + r".*Associated with", re.M)
 _RE_CONNECTED = re.compile(_TS + r".*CTRL-EVENT-CONNECTED", re.M)
 # Written only because wpa_supplicant runs with -K (log keys); without it the bytes are [REMOVED].
-# SAE: WPA3-Personal. "PMK from EAPOL state machine": 802.1X. Last match = current session.
-# Line formats taken from the wpa_supplicant source; check them against a real log.
-_RE_PMK = re.compile(r"(?:SAE: PMK|WPA: PMK from EAPOL state machine) - hexdump\(len=(\d+)\): "
+# SAE: WPA3-Personal. "PMK from EAPOL state machines": 802.1X. Last match = current session.
+# Both formats confirmed in real logs on Ubuntu 24.04 (2026-09-28); the 802.1X one says
+# "machines" in that build, so accept either spelling.
+_RE_PMK = re.compile(r"(?:SAE: PMK|WPA: PMK from EAPOL state machines?) - hexdump\(len=(\d+)\): "
                      r"((?:[0-9a-f]{2} ?)+)")
 
 
