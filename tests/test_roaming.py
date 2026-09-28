@@ -58,7 +58,8 @@ def test_roam(ft, roam_lab, clients, inventory, artifacts, attach, capture, reco
         record_property("key_mgmt", client.wpa_status().get("key_mgmt"))
 
         target = roam_lab.start_ap(1, SSID, PASS, ft)
-        assert client.scan_for(target), f"second AP {target} never showed up in a scan"
+        flag = "FT/PSK" if ft else "WPA2-PSK"
+        assert client.scan_for(target, flag), f"second AP {target} never showed up with {flag}"
         live_log = client.workdir / f"wpa_supplicant-{client.name}.log"
         offset = live_log.stat().st_size
         ping = client.start_ping(gw, PING_INTERVAL)
