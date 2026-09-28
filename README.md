@@ -168,6 +168,7 @@ What has actually been run, and where. Update this after every lab run.
 | `-m failures` | 2026-09-27, Ubuntu 24.04 VM | 6/8 before the fixes for issues #3-#5; not yet re-run with them |
 | `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
 | `-m enterprise`, `-m decrypt`, `-m roam` | 2026-09-28, Ubuntu 24.04 VM | 8/8 pass after three fixes found by the first run (802.1X PMK log line, leftover dhclient, stale scan entry before an FT roam). FT roam 57 ms vs full re-auth 159 ms (from the client log; virtual radios) |
+| `-m "failures or enterprise or decrypt or roam"` (one combined run) | 2026-09-28, Ubuntu 24.04 VM | 16/16 pass. An earlier combined run failed 5 tests because a client radio stayed busy (scan EBUSY) after the mac_blocked case; fixed by resetting the client interface on disconnect |
 | `-m android` | not run (no device) | written only |
 | `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
 
