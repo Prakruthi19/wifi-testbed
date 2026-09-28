@@ -113,6 +113,11 @@ sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop s
 .venv/bin/python -m testbed.compare reports/baseline/junit.xml reports/junit.xml  # regressions
 ```
 
+Every lab run also rebuilds `reports/dashboard.html`: one page with the latest result of every
+test grouped by suite, what each recorded (stage, roam time, throughput), the classifier's
+verdict, links to its pcap and logs, and dots for earlier runs so flaky tests stand out
+(`python -m testbed.dashboard` rebuilds it by hand; delete `reports/history` to start fresh).
+
 Every run writes `reports/junit.xml`, `reports/report.html` (with the connectivity matrix in the
 summary and logs/pcaps linked per test), `reports/matrix.html`, and
 `reports/artifacts/<test>/`.
