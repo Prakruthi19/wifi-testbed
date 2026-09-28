@@ -175,6 +175,9 @@ class WifiClient:
         pid_file = self.workdir / "dhclient.pid"
         if pid_file.exists():
             self.sh("dhclient", "-x", "-pf", str(pid_file), self.iface, check=False, timeout=10)
+        # First lab run of the new suites (2026-09-28) left one dhclient per successful join
+        # running after -x, so make sure: match this client's interface only.
+        self.sh("pkill", "-f", f"dhclient .*{self.iface}$", check=False)
         self.sh("pkill", "-f", f"wpa_supplicant.*-i {self.iface}", check=False)
         self.sh("ip", "addr", "flush", "dev", self.iface, check=False)
         wait_for(lambda: not self.wpa_status(), timeout=3)
