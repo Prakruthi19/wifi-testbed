@@ -173,7 +173,7 @@ What has actually been run, and where. Update this after every lab run.
 | `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
 | `-m enterprise`, `-m decrypt`, `-m roam` | 2026-09-28, Ubuntu 24.04 VM | 8/8 pass after three fixes found by the first run (802.1X PMK log line, leftover dhclient, stale scan entry before an FT roam). FT roam 57 ms vs full re-auth 159 ms (from the client log; virtual radios) |
 | `-m "failures or enterprise or decrypt or roam"` (one combined run) | 2026-09-28, Ubuntu 24.04 VM | 16/16 pass. An earlier combined run failed 5 tests because a client radio stayed busy (scan EBUSY) after the mac_blocked case; fixed by resetting the client interface on disconnect |
-| `-m home` | not run yet | written only (2026-09-28); unit tests for its diagnosis and expectations pass |
+| `-m home` | 2026-09-29, Ubuntu 24.04 VM | 15/15 pass: 14 in one full run, busy_house on its own after installing iperf3. First run failed every DHCP request (dnsmasq checks each address with a ping before offering it, one device at a time: 5 devices waited up to 15 s, fixed with `no-ping`). An earlier run had phone and camera lose the connection when the router restarted the 4-way handshake right after it finished; it did not recur and its cause is not known (the router's log is now saved per test) |
 | `-m android` | not run (no device) | written only |
 | `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
 
