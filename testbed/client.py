@@ -46,6 +46,14 @@ class JoinResult:
         return asdict(self)
 
 
+def lost_after_connect(log_text: str) -> bool:
+    """True when the log shows CTRL-EVENT-CONNECTED and the client left COMPLETED afterwards."""
+    last = None
+    for m in _RE_CONNECTED.finditer(log_text):
+        last = m
+    return bool(last) and "State: COMPLETED -> " in log_text[last.end():]
+
+
 def supplicant_stage(log_text: str) -> str | None:
     """Infer where a join stopped from a wpa_supplicant -dd -t log. None means it connected."""
     if _RE_CONNECTED.search(log_text):
@@ -349,7 +357,15 @@ class WifiClient:
             shutil.copy(log, artifacts / log.name)
         result = JoinResult(passed=False, assoc_ms=assoc_time_ms(log_text))
         if not connected:
-            result.failed_stage = supplicant_stage(log_text) or "network_selection"
+            stage = supplicant_stage(log_text)
+            if stage is None and lost_after_connect(log_text):
+                # Connected, then the router started the key exchange over and it never finished.
+                # Seen in the second -m home run (2026-09-29): this used to be labelled
+                # network_selection because the log does contain CTRL-EVENT-CONNECTED.
+                stage = "key_exchange"
+                result.notes.append("connected, then the router restarted the 4-way handshake "
+                                    "(message 1 again) and the connection was lost")
+            result.failed_stage = stage or "network_selection"
             return result
 
         ip, result.dhcp_ms = self.dhcp()

@@ -80,12 +80,26 @@ def disconnect_all(devs: dict) -> None:
 
 
 @pytest.fixture
-def fresh(devices, home_lab):
-    """Every test starts with all devices off the network and DHCP/DNS back to normal."""
+def fresh(devices, home_lab, artifacts, attach):
+    """Every test starts with all devices off the network and DHCP/DNS back to normal.
+    Afterwards each AP's hostapd log lines from this test are saved: the router's side of a failed
+    join. (Second run, 2026-09-29: the router restarted the 4-way handshake right after it finished
+    and the next test's restart had already wiped hostapd.log.)"""
     disconnect_all(devices)
     home_lab.set_dhcp()
+    starts = {n: ap.log.stat().st_size if ap.log.exists() else 0 for n, ap in home_lab.aps.items()}
     yield devices
     disconnect_all(devices)
+    for name, ap in home_lab.aps.items():
+        if not ap.log.exists():
+            continue
+        with ap.log.open("rb") as fh:
+            fh.seek(starts[name] if ap.log.stat().st_size >= starts[name] else 0)
+            data = fh.read()
+        if data:
+            dest = artifacts / f"hostapd-{name}.log"
+            dest.write_bytes(data)
+            attach(dest, dest.name)
 
 
 def join_devices(devs: dict, names, ap, gw: str, artifacts, passphrase: str | None = None,
