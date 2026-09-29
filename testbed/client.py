@@ -175,7 +175,10 @@ class WifiClient:
                 check=False, timeout=5)
         pid_file = self.workdir / "dhclient.pid"
         if pid_file.exists():
-            self.sh("dhclient", "-x", "-pf", str(pid_file), self.iface, check=False, timeout=10)
+            try:
+                self.sh("dhclient", "-x", "-pf", str(pid_file), self.iface, check=False, timeout=10)
+            except subprocess.TimeoutExpired:
+                pass  # a stuck dhclient is killed just below; cleanup must not fail the test
         # First lab run of the new suites (2026-09-28) left one dhclient per successful join
         # running after -x, so make sure: match this client's interface only.
         self.sh("pkill", "-f", f"dhclient .*{self.iface}$", check=False)
@@ -217,15 +220,18 @@ class WifiClient:
         status = self.wpa_status()
         return status.get("bssid") if status.get("wpa_state") == "COMPLETED" else None
 
-    def scan_for(self, bssid: str, flag: str | None = None, timeout: float = 10) -> bool:
+    def scan_for(self, bssid: str, flag: str | None = None, timeout: float = 10,
+                 flush: bool = True) -> bool:
         """Fresh scan until `bssid` is listed (and its flags contain `flag`, e.g. "FT/PSK").
 
         Old entries are flushed first: a BSS remembered from an earlier test with other security
         settings makes the client pick the wrong key management, and the 4-way handshake then
         fails because the AP's real RSN IE doesn't match the remembered one (seen in the first
-        lab run of test_roam[ft], 2026-09-28).
+        lab run of test_roam[ft], 2026-09-28). flush=False keeps entries already found, to
+        look for several APs in a row.
         """
-        self.wpa_cli("bss_flush", "0")
+        if flush:
+            self.wpa_cli("bss_flush", "0")
 
         def listed() -> bool:
             for line in self.wpa_cli("scan_results").lower().splitlines():

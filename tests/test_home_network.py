@@ -152,6 +152,10 @@ def test_mesh_walk(fresh, home_lab, inventory, artifacts, attach, capture, recor
     for name in names[1:]:
         home_lab.start(name, home_lab.config("transition", name=name))
     ip_before = phone.ipv4()
+    # Scan for every AP before the walk. A scan takes the radio off its channel, so scanning
+    # before each hop lost ~30% of the pings in the first lab run (2026-09-29): that measured
+    # the scans, not the moves.
+    seen = {name: phone.scan_for(bssids[name], flush=(i == 0)) for i, name in enumerate(route)}
 
     log = phone.workdir / f"wpa_supplicant-{phone.name}.log"
     hops = []
@@ -160,7 +164,6 @@ def test_mesh_walk(fresh, home_lab, inventory, artifacts, attach, capture, recor
         time.sleep(1)
         for name in route:
             target = bssids[name]
-            seen = phone.scan_for(target)
             offset = log.stat().st_size
             start = time.monotonic()
             moved = phone.roam(target)
@@ -168,7 +171,7 @@ def test_mesh_walk(fresh, home_lab, inventory, artifacts, attach, capture, recor
             with log.open("rb") as fh:
                 fh.seek(offset)
                 hop_log = fh.read().decode(errors="replace")
-            hops.append({"to": name, "seen_in_scan": seen, "moved": moved, "wall_ms": wall_ms,
+            hops.append({"to": name, "seen_in_scan": seen[name], "moved": moved, "wall_ms": wall_ms,
                          "log_ms": assoc_time_ms(hop_log)})
             time.sleep(1)
     finally:
