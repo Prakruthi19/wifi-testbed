@@ -30,7 +30,7 @@ def check(clean: bool = False) -> list[tuple[bool, str]]:
 
     add(os.geteuid() == 0, "running as root")
     for tool in TOOLS:
-        add(shutil.which(tool) is not None, f"tool installed: {tool}")
+        add(shutil.which(tool) is not None, f"found (already installed): {tool}")
     add(Path("/sys/class/net/hwsim0").exists(), "hwsim0 capture interface exists")
     try:
         lab = inv.load()
