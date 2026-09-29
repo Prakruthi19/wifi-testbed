@@ -159,8 +159,14 @@ class WifiClient:
         return self.sh("cat", f"/sys/class/net/{self.iface}/address").stdout.strip()
 
     def wpa_cli(self, *args: str, timeout: float = 5) -> str:
-        return self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, *args,
-                       check=False, timeout=timeout).stdout
+        # A busy or half-stopped wpa_supplicant can leave wpa_cli waiting on its control socket.
+        # Treat that as "no answer" so callers keep polling instead of the test crashing (first
+        # -m qualify / -m faults run, 2026-09-29: TimeoutExpired from wpa_cli ended two tests).
+        try:
+            return self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, *args,
+                           check=False, timeout=timeout).stdout
+        except subprocess.TimeoutExpired:
+            return ""
 
     def wpa_status(self) -> dict[str, str]:
         out = self.wpa_cli("status")
@@ -297,8 +303,12 @@ class WifiClient:
 
     def resolve(self, server: str, name: str, timeout: float = 2) -> tuple[list[str], float]:
         start = time.monotonic()
-        proc = self.sh("dig", "+short", f"+time={int(timeout)}", "+tries=1", f"@{server}", name,
-                       check=False, timeout=timeout + 5)
+        try:
+            proc = self.sh("dig", "+short", f"+time={int(timeout)}", "+tries=1", f"@{server}", name,
+                           check=False, timeout=timeout + 5)
+        except subprocess.TimeoutExpired:
+            # dig itself hung (seen once in -m vlan, 2026-09-29): report "no answer", not a crash.
+            return [], round((time.monotonic() - start) * 1000, 1)
         elapsed = round((time.monotonic() - start) * 1000, 1)
         answers = [a for a in proc.stdout.split() if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", a)]
         return answers, elapsed
