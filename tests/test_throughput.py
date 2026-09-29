@@ -23,7 +23,10 @@ SECONDS = 5
 # downlink was clean, because the emulated upload path is CPU-bound in the VM; a fixed 20 Mbps
 # pass/fail measured the VM, not the data path. Smoke thresholds, not RF targets.
 UDP_RATES_MBPS = (20, 10, 5, 2)
-MIN_CLEAN_UDP_MBPS = 2  # one HD camera stream; below this the data path is broken, not slow
+MIN_CLEAN_UDP_MBPS = 1  # delivered; below this the data path is broken, not slow
+# iperf3's loss % only counts datagrams that were sent. If the sender cannot keep up (CPU-bound
+# VM), it sends less than asked and loss still reads 0% (2026-09-29: asked 20, delivered 4.06,
+# 0% lost). So the recorded capacity is what arrived, never the rate that was asked for.
 MAX_LOSS_PERCENT = 5.0
 MAX_JITTER_MS = 30.0
 MAX_AVG_RTT_MS = 50.0
@@ -90,18 +93,20 @@ def test_udp_jitter_loss(direction, hostap, dnsmasq, clients, inventory, iperf_s
     finally:
         client.disconnect()
 
-    clean_mbps = result.target_mbps if result else 0
+    clean_mbps = result.mbps if result else 0  # delivered, see MIN_CLEAN_UDP_MBPS
     (artifacts / "iperf-udp.json").write_text(json.dumps(
         {"measurement": VIRTUAL_NOTE, "ap": ap.label, "max_clean_mbps": clean_mbps, "tries": tries},
         indent=2))
     attach(artifacts / "iperf-udp.json")
     record_property("measurement", VIRTUAL_NOTE)
     record_property("max_clean_mbps", clean_mbps)
-    record_property("tries", [(t["target_mbps"], t["lost_percent"]) for t in tries])
+    record_property("tries", [(t["target_mbps"], t["mbps"], t["lost_percent"]) for t in tries])
 
     assert result is not None and clean_mbps >= MIN_CLEAN_UDP_MBPS, \
-        f"no rate down to {UDP_RATES_MBPS[-1]} Mbps stayed under {MAX_LOSS_PERCENT}% loss: " + \
-        ", ".join(f"{t['target_mbps']} Mbps -> {t['lost_percent']}% lost ({t['error']})" for t in tries)
+        f"no rate down to {UDP_RATES_MBPS[-1]} Mbps delivered {MIN_CLEAN_UDP_MBPS}+ Mbps under " \
+        f"{MAX_LOSS_PERCENT}% loss: " + ", ".join(
+            f"asked {t['target_mbps']} got {t['mbps']} Mbps, {t['lost_percent']}% lost ({t['error']})"
+            for t in tries)
     record_property("jitter_ms", result.jitter_ms)
     assert result.jitter_ms <= MAX_JITTER_MS, f"jitter {result.jitter_ms} ms at {clean_mbps} Mbps"
 
