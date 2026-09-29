@@ -49,8 +49,9 @@ def test_ap_template_features():
                 sae_password=None, deny_macs=[], bridge="br-home")
     plain = render("hostapd/ap.conf.j2", **base)
     assert "rrm_neighbor_report" not in plain and "ap_isolate" not in plain
-    full = render("hostapd/ap.conf.j2", rrm=True, bss_transition=True, ap_isolate=True, **base)
-    for line in ("rrm_neighbor_report=1", "bss_transition=1", "ap_isolate=1"):
+    full = render("hostapd/ap.conf.j2", rrm=True, bss_transition=True, ap_isolate=True,
+                  ht_capab="[HT40+]", **base)
+    for line in ("rrm_neighbor_report=1", "bss_transition=1", "ap_isolate=1", "ht_capab=[HT40+]"):
         assert line in full.splitlines()
 
 

@@ -14,6 +14,10 @@ ieee80211d=1
 hw_mode={{ hw_mode }}
 channel={{ channel }}
 ieee80211n=1
+{% if ht_capab is defined and ht_capab %}
+# 40 MHz channel: about twice the speed of 20 MHz
+ht_capab={{ ht_capab }}
+{% endif %}
 wmm_enabled=1
 beacon_int=100
 
