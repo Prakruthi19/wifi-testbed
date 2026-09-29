@@ -501,6 +501,8 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
 
     router_log = home_lab.aps[router].log
     offset = router_log.stat().st_size
+    phone_log = phone.workdir / f"wpa_supplicant-{phone.name}.log"
+    phone_offset = phone_log.stat().st_size
     start = time.monotonic()
     sent = home_lab.steer(router, phone.mac, target, channel)
     responses = wait_for(lambda: parse_btm_responses(log_since(router_log, offset), phone.mac),
@@ -518,6 +520,10 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
               "seconds": elapsed_s, "online_after": online,
               "ip_before": ip_before, "ip_after": phone.ipv4()}
     (artifacts / "steering.json").write_text(json.dumps(result, indent=2))
+    # The phone's side of the request (how it picked where to go); its log is replaced at the
+    # next join, so keep this test's part.
+    (artifacts / "phone-after-request.log").write_text(log_since(phone_log, phone_offset))
+    attach(artifacts / "phone-after-request.log")
     attach(artifacts / "steering.json")
     record_property("answer", result["answer_in_words"])
     record_property("seconds", elapsed_s)
