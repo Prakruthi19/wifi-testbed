@@ -21,6 +21,7 @@ from testbed.report import matrix_html
 ARTIFACTS_DIR = REPORTS_DIR / "artifacts"
 ATTACHMENTS = pytest.StashKey[list]()
 MATRIX_RESULTS: list[dict] = []
+RUN_RESULTS: list[dict] = []  # every test's verdict this session, for reports/dashboard.html
 
 
 # -- options & collection ------------------------------------------------------------------
@@ -29,8 +30,16 @@ def pytest_addoption(parser):
     g = parser.getgroup("testbed")
     g.addoption("--repeats", type=int, default=5, help="joins per matrix case (default 5)")
     g.addoption("--channels", default=None, help="comma-separated channel subset, e.g. 6,36")
+    g.addoption("--attenuator", default=None,
+                help="programmable attenuator base URL for -m rf (real RF setup only)")
     g.addoption("--android-serial", default=None, help="adb serial (default: only device)")
     g.addoption("--android-ping-host", default="8.8.8.8", help="host pinged from the emulator")
+    g.addoption("--android-ssid", default=None,
+                help="network the phone joins by command (join tests skip without it)")
+    g.addoption("--android-security", default="wpa2", choices=["open", "owe", "wpa2", "wpa3"])
+    g.addoption("--android-psk", default=None, help="passphrase for --android-ssid")
+    g.addoption("--android-bugreport", action="store_true",
+                help="save an adb bugreport zip when an Android test fails (slow)")
 
 
 def lab_available() -> str | None:
@@ -108,6 +117,11 @@ def pytest_runtest_makereport(item, call):
 
 
 def pytest_runtest_logreport(report):
+    from testbed.dashboard import record
+
+    entry = record(report)
+    if entry:
+        RUN_RESULTS.append(entry)
     if report.when == "call":
         props = dict(report.user_properties)
         if "matrix_row" in props:
@@ -123,7 +137,34 @@ def pytest_html_results_summary(prefix, summary, postfix):
         prefix.append("<h2>Connectivity matrix</h2>" + matrix_html(MATRIX_RESULTS))
 
 
+LAB_DAEMONS = ("hostapd", "wpa_supplicant", "dnsmasq", "dumpcap", "dhclient", "iperf3")
+
+
+def leftover_daemons() -> dict[str, list[str]]:
+    import subprocess
+    out = {}
+    for name in LAB_DAEMONS:
+        pids = subprocess.run(["pgrep", "-x", name], capture_output=True, text=True).stdout.split()
+        if pids:
+            out[name] = pids
+    return out
+
+
 def pytest_sessionfinish(session):
+    # Cleanup check: after lab tests, every daemon the harness started should be gone, even when
+    # tests failed. Anything left is written down so the next run doesn't inherit it silently.
+    ran_lab = any("lab" in item.keywords for item in getattr(session, "items", []))
+    if ran_lab and lab_available() is None:
+        left = leftover_daemons()
+        REPORTS_DIR.mkdir(exist_ok=True)
+        path = REPORTS_DIR / "leftover-processes.txt"
+        if left:
+            path.write_text("".join(f"{k}: {' '.join(v)}\n" for k, v in left.items()))
+            print(f"\nWARNING: lab processes still running after the run: {left} (see {path}; "
+                  f"sudo .venv/bin/python -m testbed.preflight --clean)")
+        else:
+            path.write_text("none\n")
+
     if MATRIX_RESULTS:
         REPORTS_DIR.mkdir(exist_ok=True)
         (REPORTS_DIR / "matrix.html").write_text(
@@ -131,6 +172,29 @@ def pytest_sessionfinish(session):
             "<body style='font-family:sans-serif'><h1>Connectivity matrix</h1>"
             + matrix_html(MATRIX_RESULTS) + "</body>")
 
+    # Dashboard: only when some lab test actually ran, so unit-only runs (and CI) leave it alone.
+    if any(r["suite"] != "unit" and r["outcome"] != "skipped" for r in RUN_RESULTS):
+        from testbed import dashboard
+
+        dashboard.save_run(RUN_RESULTS)
+        page = dashboard.write()
+        print(f"\ndashboard: {page}")
+
+    give_reports_to_sudo_user()
+
+
+def give_reports_to_sudo_user() -> None:
+    """Lab tests run under sudo, so everything they write in reports/ belongs to root. Hand it
+    back to the user who ran sudo, so they can open the dashboard, pcaps and logs without sudo
+    (Ubuntu's snap Firefox refuses files in your home that you don't own)."""
+    uid, gid = os.environ.get("SUDO_UID"), os.environ.get("SUDO_GID")
+    if os.geteuid() != 0 or not uid or not REPORTS_DIR.exists():
+        return
+    for p in [REPORTS_DIR, *REPORTS_DIR.rglob("*")]:
+        try:
+            os.chown(p, int(uid), int(gid or uid), follow_symlinks=False)
+        except OSError:
+            pass
 
 # -- lab fixtures --------------------------------------------------------------------------
 

@@ -10,7 +10,7 @@ pkill -f 'dhclient .*sta[0-9]' 2>/dev/null
 pkill -f 'dumpcap .*hwsim0' 2>/dev/null
 
 nft delete table inet labfw 2>/dev/null
-for l in br-lab.10 br-lab.20 br-lab.30 br-lab; do ip link del "$l" 2>/dev/null; done
+for l in br-lab.10 br-lab.20 br-lab.30 br-lab br-roam br-home; do ip link del "$l" 2>/dev/null; done
 
 for ns in $(ip netns list | awk '/^ns-client/{print $1}'); do
   ip netns del "$ns"

@@ -62,6 +62,11 @@ class HostAP:
                    check=False, timeout=5)
         return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
 
+    def deauthenticate(self, mac: str) -> None:
+        """Kick one client off the AP (sends a Deauthentication frame to it)."""
+        run(["hostapd_cli", "-p", str(self.ctrl_dir), "-i", self.iface, "deauthenticate", mac],
+            check=False, timeout=5)
+
     def enabled(self) -> bool:
         return self.status().get("state") == "ENABLED"
 

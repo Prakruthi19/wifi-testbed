@@ -1,0 +1,17 @@
+name: unit tests
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  unit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      # Lab tests need root, mac80211_hwsim and a VM; they skip here with the reason printed.
+      - run: python -m pytest -ra

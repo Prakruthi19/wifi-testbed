@@ -53,8 +53,13 @@ CASES = [
                 ("network_selection",)),
     FailureCase("pmf_mismatch", wpa2(pmf=2),
                 {"key_mgmt": "WPA-PSK", "ieee80211w": 0, "psk": PASS}, ("network_selection",)),
+    # hostapd never sends the denied client a Probe Response. If the client only knows the AP
+    # from probing, it never picks it (network_selection, first run 2026-09-27). If it already
+    # knows the AP from Beacons, it tries to authenticate and hostapd rejects with status 1
+    # (authentication, combined run 2026-09-28). Both are the same denial.
     FailureCase("mac_blocked", wpa2(),
-                {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS}, ("authentication",),
+                {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS},
+                ("network_selection", "authentication"),
                 deny_client=True),
     FailureCase("dhcp_server_down", wpa2(),
                 {"key_mgmt": "WPA-PSK", "ieee80211w": 1, "psk": PASS}, ("dhcp",), dhcp=False),

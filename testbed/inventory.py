@@ -44,6 +44,10 @@ class Inventory:
     def vlans(self) -> list[dict]:
         return self.raw["vlans"]
 
+    @property
+    def home(self) -> dict:
+        return self.raw["home"]
+
 
 def load(path: Path | None = None) -> Inventory:
     path = path or LAB_DIR / "inventory.yaml"
