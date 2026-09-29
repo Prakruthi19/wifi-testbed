@@ -267,12 +267,18 @@ class WifiClient:
         leases.unlink(missing_ok=True)
         start = time.monotonic()
         try:
-            self.sh("dhclient", "-1", "-v", "-cf", str(conf), "-pf", str(self.workdir / "dhclient.pid"),
-                    "-lf", str(leases), self.iface, check=False, timeout=timeout + 5)
-        except subprocess.TimeoutExpired:
+            proc = self.sh("dhclient", "-1", "-v", "-cf", str(conf), "-pf", str(self.workdir / "dhclient.pid"),
+                           "-lf", str(leases), self.iface, check=False, timeout=timeout + 5)
+            out = (proc.stdout or "") + (proc.stderr or "")
+        except subprocess.TimeoutExpired as e:
             # No DHCP server answered and dhclient kept retrying; the caller sees ip=None.
-            pass
+            out = "".join(x.decode(errors="replace") if isinstance(x, bytes) else (x or "")
+                          for x in (e.stdout, e.stderr)) + "\n(timed out)\n"
         elapsed = round((time.monotonic() - start) * 1000, 1)
+        # dhclient -v lists every DISCOVER/OFFER/REQUEST/ACK it sent or got, with times: the
+        # client's side of a DHCP failure (the server's side is in dnsmasq.log).
+        (self.workdir / "dhclient.log").write_text(
+            time.strftime("%H:%M:%S started\n", time.localtime(time.time() - elapsed / 1000)) + out)
         return self.ipv4(), elapsed
 
     def resolve(self, server: str, name: str, timeout: float = 2) -> tuple[list[str], float]:
@@ -342,6 +348,8 @@ class WifiClient:
 
         ip, result.dhcp_ms = self.dhcp()
         result.ip = ip
+        if artifacts and (self.workdir / "dhclient.log").exists():
+            shutil.copy(self.workdir / "dhclient.log", artifacts / "dhclient.log")
         if not ip:
             result.failed_stage = "dhcp"
             return result
