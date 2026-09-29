@@ -265,11 +265,19 @@ class HomeLab:
                 given[name].append(bssid)
         return given
 
-    def steer(self, name: str, sta_mac: str, target_bssid: str, target_channel: int) -> str:
+    def steer(self, name: str, sta_mac: str, target_bssid: str, target_channel: int,
+              imminent: bool = False) -> str:
         """802.11v: AP `name` asks the device to move to `target_bssid`. Returns hostapd's answer
-        to the command (OK/FAIL); the device's reply arrives later as BSS-TM-RESP in the log."""
-        return self.aps[name].cli("bss_tm_req", sta_mac, "pref=1", "abridged=1",
-                                  f"neighbor={btm_candidate(target_bssid, target_channel)}").strip()
+        to the command (OK/FAIL); the device's reply arrives later as BSS-TM-RESP in the log.
+
+        imminent: set "disassociation imminent" with a timer of 100 beacons (~10 s): the AP
+        will drop the device, so it must leave. Without it the request is a suggestion and the
+        device may stay if the target is not clearly better."""
+        args = ["bss_tm_req", sta_mac, "pref=1", "abridged=1"]
+        if imminent:
+            args += ["disassoc_imminent=1", "disassoc_timer=100"]
+        args.append(f"neighbor={btm_candidate(target_bssid, target_channel)}")
+        return self.aps[name].cli(*args).strip()
 
     def stop(self, name: str) -> None:
         self.aps[name].stop()
