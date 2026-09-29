@@ -95,7 +95,16 @@ class IperfServer:
         if not wait_for(lambda: self._listening() or self._proc.poll() is not None, timeout=5):
             log.warning("iperf3 server on %s:%s did not start listening", self.bind, self.port)
         if self._proc.poll() is not None:
-            raise RuntimeError(f"iperf3 server exited: {self._proc.stderr.read()}")
+            # With --logfile, iperf3 writes its errors to the log, not stderr (first home run,
+            # 2026-09-29: the error was empty). Also name what is already on the port.
+            why = self._proc.stderr.read().strip()
+            if self.log.exists():
+                why = (why + " " + self.log.read_text(errors="replace").strip()[-300:]).strip()
+            users = subprocess.run(["ss", "-ltnp", f"sport = :{self.port}"], capture_output=True,
+                                   text=True).stdout.strip().splitlines()[1:]
+            if users:
+                why += f" | already listening on port {self.port}: {' '.join(users)[:200]}"
+            raise RuntimeError(f"iperf3 server on {self.bind}:{self.port} exited: {why or 'no message'}")
         return self
 
     def _listening(self) -> bool:
