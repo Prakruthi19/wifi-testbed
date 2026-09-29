@@ -141,7 +141,13 @@ def test_parse_iperf_udp_json():
     text = json.dumps({"end": {"sum": {"bits_per_second": 19_800_000, "jitter_ms": 0.0421,
                                        "lost_percent": 0.35}}})
     r = parse_iperf_udp_json(text, "uplink", 20)
-    assert (r.mbps, r.jitter_ms, r.lost_percent, r.error) == (19.8, 0.042, 0.35, None)
+    assert (r.sent_mbps, r.mbps, r.jitter_ms, r.lost_percent, r.error) == \
+        (19.8, 19.73, 0.042, 0.35, None)
+    both = json.dumps({"end": {"sum": {"bits_per_second": 20e6, "jitter_ms": 1, "lost_percent": 50},
+                               "sum_sent": {"bits_per_second": 20e6},
+                               "sum_received": {"bits_per_second": 9e6}}})
+    r = parse_iperf_udp_json(both, "uplink", 20)
+    assert (r.sent_mbps, r.mbps) == (20.0, 9.0)
     assert parse_iperf_udp_json('{"error": "boom"}', "uplink", 20).lost_percent == 100.0
 
 
