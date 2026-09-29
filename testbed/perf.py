@@ -58,6 +58,7 @@ class UdpResult:
     jitter_ms: float
     lost_percent: float
     error: str | None = None
+    sent_mbps: float | None = None  # what the sender managed; less than target = sender-bound
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -71,9 +72,16 @@ def parse_iperf_udp_json(text: str, direction: str, target_mbps: float) -> UdpRe
         return UdpResult(direction, target_mbps, 0.0, 0.0, 100.0, error=f"not JSON: {text[:200]!r}")
     if data.get("error"):
         return UdpResult(direction, target_mbps, 0.0, 0.0, 100.0, error=data["error"])
-    s = data.get("end", {}).get("sum", {})
-    return UdpResult(direction, target_mbps, round(s.get("bits_per_second", 0.0) / 1e6, 2),
-                     round(s.get("jitter_ms", 0.0), 3), round(s.get("lost_percent", 100.0), 2))
+    end = data.get("end", {})
+    s = end.get("sum", {})
+    lost = s.get("lost_percent", 100.0)
+    # "sum" is the sender's rate (2026-09-29 VM run: asked 20, sum 19.98 Mbps with 6.69% lost).
+    # Received = sum_received when this iperf3 reports it, else the sent rate minus the loss.
+    sent = end.get("sum_sent", s).get("bits_per_second", 0.0)
+    received = end.get("sum_received", {}).get("bits_per_second", sent * (1 - lost / 100))
+    return UdpResult(direction, target_mbps, round(received / 1e6, 2),
+                     round(s.get("jitter_ms", 0.0), 3), round(lost, 2),
+                     sent_mbps=round(sent / 1e6, 2))
 
 
 class IperfServer:
