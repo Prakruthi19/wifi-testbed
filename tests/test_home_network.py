@@ -11,8 +11,9 @@
 6. troubleshooting     break one thing, check the diagnosis names the cause in plain words,
                        apply the fix, and check the device joins
 7. router-assisted     802.11k: the phone asks for the list of nearby APs and gets the other two.
-   roaming             802.11v: the router asks the phone to move; it moves to a real mesh point
-                       and says no to one that does not exist
+   roaming             802.11v: the router asks the phone to move; a plain request is recorded
+                       (the phone may stay), "you will be dropped" must move it to the mesh
+                       point, and a missing AP must not pull it off the router
 8. device discovery    the phone finds the speaker by mDNS (like a casting app) on one router and
                        across a mesh point; with client isolation on it cannot, and can again
                        once isolation is off
@@ -471,19 +472,31 @@ def test_neighbor_report(fresh, home_lab, inventory, artifacts, attach, capture,
 
 
 STEERING = {
-    # case: (target is a real mesh point?, device should accept)
+    # case: (target is a real mesh point?, "disassociation imminent" set?)
+    # A plain request is a suggestion: the device may stay if the target is not clearly better.
+    # "Disassociation imminent" says "you will be dropped soon", so the device must go.
+    "suggestion": (True, False),
     "to_mesh_point": (True, True),
-    "to_missing_ap": (False, False),  # router names an AP that is not there: device must say no
+    "to_missing_ap": (False, False),  # router names an AP that is not there
 }
 
 
 @pytest.mark.parametrize("case", list(STEERING))
 def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, record_property):
-    """802.11v: the router asks the phone to move. To a real mesh point the phone must say yes
-    (status 0), move there and keep its address. To an AP that does not exist it must say no
-    and stay online where it is."""
+    """802.11v: the router asks the phone to move.
+
+    First lab run (2026-09-29): to a real mesh point AND to a missing AP, the phone answered
+    status 0 with target_bssid = the router it was already on, i.e. "I'll stay". A plain
+    request is only a suggestion, and every fake radio has the same signal, so the mesh point
+    is never better than where the phone is (inferred from wpa_supplicant's roaming rule; the
+    phone's log is now saved to confirm it). So the cases are:
+    - suggestion: recorded, not judged; the phone must answer and stay online
+    - to_mesh_point: "disassociation imminent" set, so the phone must move there and keep its
+      address
+    - to_missing_ap: the phone must not claim to go there, and must stay online on the router
+    """
     gw = inventory.lab["gateway"]
-    real_target, should_accept = STEERING[case]
+    real_target, imminent = STEERING[case]
     bssids = home_lab.start_all("transition", rrm=True, bss_transition=True)
     home_lab.set_neighbors()
     ap = home_lab.config("transition")
@@ -504,39 +517,43 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
     phone_log = phone.workdir / f"wpa_supplicant-{phone.name}.log"
     phone_offset = phone_log.stat().st_size
     start = time.monotonic()
-    sent = home_lab.steer(router, phone.mac, target, channel)
+    sent = home_lab.steer(router, phone.mac, target, channel, imminent=imminent)
     responses = wait_for(lambda: parse_btm_responses(log_since(router_log, offset), phone.mac),
                          timeout=10) or []
     moved = bool(wait_for(lambda: phone.current_bssid() == target, timeout=10, interval=0.05)) \
         if real_target else False
     elapsed_s = round(time.monotonic() - start, 2)
     online = bool(wait_for(lambda: phone.ping(gw, 1), timeout=MAX_BACK_ONLINE_S, interval=0.1))
-    status = responses[0].get("status_code") if responses else None
+    answer = responses[0] if responses else {}
+    status = answer.get("status_code")
+    names = {b: n for n, b in bssids.items()}
+    said_go_to = names.get(answer.get("target_bssid"), answer.get("target_bssid"))
 
-    result = {"case": case, "target": target, "router_command": sent,
-              "answer": responses[0] if responses else None,
+    result = {"case": case, "target": target, "disassociation_imminent": imminent,
+              "router_command": sent, "answer": answer or None,
               "answer_in_words": BTM_STATUS.get(status, "no answer") if status is not None else "no answer",
+              "phone_said_it_would_go_to": said_go_to,
               "moved": moved, "now_on": home_lab.ap_for_bssid(phone.current_bssid()),
               "seconds": elapsed_s, "online_after": online,
               "ip_before": ip_before, "ip_after": phone.ipv4()}
     (artifacts / "steering.json").write_text(json.dumps(result, indent=2))
+    attach(artifacts / "steering.json")
     # The phone's side of the request (how it picked where to go); its log is replaced at the
     # next join, so keep this test's part.
     (artifacts / "phone-after-request.log").write_text(log_since(phone_log, phone_offset))
     attach(artifacts / "phone-after-request.log")
-    attach(artifacts / "steering.json")
-    record_property("answer", result["answer_in_words"])
-    record_property("seconds", elapsed_s)
+    record_property("answer", f"{result['answer_in_words']}, going to {said_go_to}")
+    record_property("moved", moved)
 
     assert sent == "OK", f"router refused to send the request ({sent!r}): is bss_transition on?"
     assert responses, "phone never answered the transition request"
-    if should_accept:
-        assert status == 0, f"phone said no: {result['answer_in_words']} ({responses[0]})"
-        assert responses[0].get("target_bssid") == target, f"phone chose another AP: {responses[0]}"
+    if case == "to_mesh_point":
+        assert status == 0, f"phone said no: {result['answer_in_words']} ({answer})"
+        assert answer.get("target_bssid") == target, f"phone said it would go to {said_go_to}, not {mesh}"
         assert moved, f"phone said yes but is on {result['now_on']}, not {mesh}"
         assert result["ip_after"] == ip_before, f"address changed: {ip_before} -> {result['ip_after']}"
-    else:
-        assert status != 0, f"phone accepted a move to an AP that does not exist: {responses[0]}"
+    elif case == "to_missing_ap":
+        assert answer.get("target_bssid") != target, f"phone claimed it would go to a missing AP: {answer}"
         assert result["now_on"] == router, f"phone left the router for {result['now_on']}"
     assert online, f"phone could not reach the router within {MAX_BACK_ONLINE_S}s afterwards"
 
