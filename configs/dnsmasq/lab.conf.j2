@@ -9,6 +9,11 @@ domain={{ domain }}
 pid-file={{ pid_file }}
 log-facility={{ log_file }}
 log-dhcp
+# No "is this address free?" ping before each offer. dnsmasq waits up to 3 s per ping, one client
+# at a time: in the first home-network run (2026-09-29) five devices asking together got their
+# offers 3 s apart, the last ones after their DHCP client had given up. Every lab lease is
+# fresh, so the check guards nothing here.
+no-ping
 log-queries
 
 {% if dns %}
