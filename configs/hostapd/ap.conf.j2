@@ -17,6 +17,20 @@ ieee80211n=1
 wmm_enabled=1
 beacon_int=100
 
+{% if rrm is defined and rrm %}
+# 802.11k: answer "which other APs of this network are near you?" (neighbor report)
+rrm_neighbor_report=1
+rrm_beacon_report=1
+{% endif %}
+{% if bss_transition is defined and bss_transition %}
+# 802.11v: this AP may ask a device to move to another AP (BSS Transition Management)
+bss_transition=1
+{% endif %}
+{% if ap_isolate is defined and ap_isolate %}
+# Client isolation: devices on this AP cannot talk to each other (like a guest network)
+ap_isolate=1
+{% endif %}
+
 {% if deny_macs %}
 macaddr_acl=0
 deny_mac_file={{ deny_mac_file }}

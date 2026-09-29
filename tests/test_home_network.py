@@ -10,6 +10,12 @@
 5. busy house          laptop downloads and camera streams while the others measure delay
 6. troubleshooting     break one thing, check the diagnosis names the cause in plain words,
                        apply the fix, and check the device joins
+7. router-assisted     802.11k: the phone asks for the list of nearby APs and gets the other two.
+   roaming             802.11v: the router asks the phone to move; it moves to a real mesh point
+                       and says no to one that does not exist
+8. device discovery    the phone finds the speaker by mDNS (like a casting app) on one router and
+                       across a mesh point; with client isolation on it cannot, and can again
+                       once isolation is off
 
 Needs `sudo HOMENET=1 lab/setup_lab.sh` (ap1, ap2 and sta1..sta5).
 """
@@ -17,7 +23,10 @@ Needs `sudo HOMENET=1 lab/setup_lab.sh` (ap1, ap2 and sta1..sta5).
 from __future__ import annotations
 
 import json
+import subprocess
+import sys
 import time
+from pathlib import Path
 
 import pytest
 
@@ -27,7 +36,8 @@ from testbed.home import (INTEROP_ROUTERS, HomeLab, device_profiles, diagnose, e
                           in_parallel, parse_scan_results, small_pool)
 from testbed.network import iface_in_namespace
 from testbed.perf import VIRTUAL_NOTE, IperfServer
-from testbed.util import wait_for
+from testbed.steering import BTM_STATUS, parse_btm_responses, parse_neighbor_reports
+from testbed.util import ns_prefix, wait_for
 
 pytestmark = [pytest.mark.lab, pytest.mark.home]
 
@@ -405,3 +415,203 @@ def test_troubleshoot(case, fresh, home_lab, inventory, artifacts, attach, captu
     assert diag and diag.cause == cause, f"diagnosis {diag}, expected {cause}"
     still = {n: r.failed_stage for n, r in after.items() if not r.passed}
     assert not still, f"after the fix, still failing: {still}"
+
+
+# -- 7. router-assisted roaming (802.11k neighbor report, 802.11v steering) ---------------------
+
+def log_since(path, offset: int) -> str:
+    if not path.exists():
+        return ""
+    with path.open("rb") as fh:
+        fh.seek(offset if path.stat().st_size >= offset else 0)
+        return fh.read().decode(errors="replace")
+
+
+def put_on(home_lab, device, name: str, bssids: dict) -> None:
+    """Put a device on AP `name` (it may have picked another one when it joined)."""
+    if device.current_bssid() != bssids[name]:
+        assert device.scan_for(bssids[name]) and device.roam(bssids[name]), \
+            f"could not put the {device.name} on {name}"
+
+
+def test_neighbor_report(fresh, home_lab, inventory, artifacts, attach, capture, record_property):
+    """802.11k: the phone asks its AP which other APs of the network are nearby, and the answer
+    must list the two others with their right channels."""
+    gw = inventory.lab["gateway"]
+    bssids = home_lab.start_all("transition", rrm=True, bss_transition=True)
+    given = home_lab.set_neighbors()
+    ap = home_lab.config("transition")
+    phone, profile = fresh["phone"]
+    join = phone.join(ap.ssid, profile.network_for(ap), gateway=gw, artifacts=artifacts)
+    assert join.passed, f"phone failed to join at {join.failed_stage}"
+    on = home_lab.ap_for_bssid(phone.current_bssid())
+
+    log = phone.workdir / f"wpa_supplicant-{phone.name}.log"
+    offset = log.stat().st_size
+    answer = phone.wpa_cli("neighbor_rep_request").strip()
+    got = wait_for(lambda: parse_neighbor_reports(log_since(log, offset)), timeout=5) or []
+    time.sleep(0.5)  # every entry arrives in one frame, but give the log a moment to catch up
+    got = parse_neighbor_reports(log_since(log, offset)) or got
+
+    names = {b: n for n, b in bssids.items()}
+    reported = {r["bssid"]: {"ap": names.get(r["bssid"], "unknown"), "channel": r.get("chan")}
+                for r in got}
+    result = {"phone_on": on, "request": answer, "given_to_ap": given[on], "reported": reported}
+    (artifacts / "neighbor-report.json").write_text(json.dumps(result, indent=2))
+    attach(artifacts / "neighbor-report.json")
+    record_property("reported", reported)
+
+    assert answer == "OK", f"phone did not send a neighbor request ({answer!r}): does {on} " \
+                           f"advertise 802.11k, and does the phone support it?"
+    missing = [names[b] for b in given[on] if b not in reported]
+    assert not missing, f"{on}'s answer left out {missing}: {reported}"
+    wrong = {v["ap"]: v["channel"] for b, v in reported.items()
+             if b in names and b != bssids[on] and v["channel"] != home_lab.channels[names[b]]}
+    assert not wrong, f"wrong channel reported for {wrong}"
+
+
+STEERING = {
+    # case: (target is a real mesh point?, device should accept)
+    "to_mesh_point": (True, True),
+    "to_missing_ap": (False, False),  # router names an AP that is not there: device must say no
+}
+
+
+@pytest.mark.parametrize("case", list(STEERING))
+def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, record_property):
+    """802.11v: the router asks the phone to move. To a real mesh point the phone must say yes
+    (status 0), move there and keep its address. To an AP that does not exist it must say no
+    and stay online where it is."""
+    gw = inventory.lab["gateway"]
+    real_target, should_accept = STEERING[case]
+    bssids = home_lab.start_all("transition", rrm=True, bss_transition=True)
+    home_lab.set_neighbors()
+    ap = home_lab.config("transition")
+    phone, profile = fresh["phone"]
+    router, mesh = home_lab.router_name, list(bssids)[1]
+    join = phone.join(ap.ssid, profile.network_for(ap), gateway=gw, artifacts=artifacts)
+    assert join.passed, f"phone failed to join at {join.failed_stage}"
+    put_on(home_lab, phone, router, bssids)
+    ip_before = phone.ipv4()
+    if real_target:
+        target, channel = bssids[mesh], home_lab.channels[mesh]
+        phone.scan_for(target, flush=False)  # like a real device, it has seen the mesh point
+    else:
+        target, channel = "02:00:00:00:99:00", home_lab.channels[mesh]
+
+    router_log = home_lab.aps[router].log
+    offset = router_log.stat().st_size
+    start = time.monotonic()
+    sent = home_lab.steer(router, phone.mac, target, channel)
+    responses = wait_for(lambda: parse_btm_responses(log_since(router_log, offset), phone.mac),
+                         timeout=10) or []
+    moved = bool(wait_for(lambda: phone.current_bssid() == target, timeout=10, interval=0.05)) \
+        if real_target else False
+    elapsed_s = round(time.monotonic() - start, 2)
+    online = bool(wait_for(lambda: phone.ping(gw, 1), timeout=MAX_BACK_ONLINE_S, interval=0.1))
+    status = responses[0].get("status_code") if responses else None
+
+    result = {"case": case, "target": target, "router_command": sent,
+              "answer": responses[0] if responses else None,
+              "answer_in_words": BTM_STATUS.get(status, "no answer") if status is not None else "no answer",
+              "moved": moved, "now_on": home_lab.ap_for_bssid(phone.current_bssid()),
+              "seconds": elapsed_s, "online_after": online,
+              "ip_before": ip_before, "ip_after": phone.ipv4()}
+    (artifacts / "steering.json").write_text(json.dumps(result, indent=2))
+    attach(artifacts / "steering.json")
+    record_property("answer", result["answer_in_words"])
+    record_property("seconds", elapsed_s)
+
+    assert sent == "OK", f"router refused to send the request ({sent!r}): is bss_transition on?"
+    assert responses, "phone never answered the transition request"
+    if should_accept:
+        assert status == 0, f"phone said no: {result['answer_in_words']} ({responses[0]})"
+        assert responses[0].get("target_bssid") == target, f"phone chose another AP: {responses[0]}"
+        assert moved, f"phone said yes but is on {result['now_on']}, not {mesh}"
+        assert result["ip_after"] == ip_before, f"address changed: {ip_before} -> {result['ip_after']}"
+    else:
+        assert status != 0, f"phone accepted a move to an AP that does not exist: {responses[0]}"
+        assert result["now_on"] == router, f"phone left the router for {result['now_on']}"
+    assert online, f"phone could not reach the router within {MAX_BACK_ONLINE_S}s afterwards"
+
+
+# -- 8. device discovery (mDNS) ----------------------------------------------------------------
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DISCOVERY = {
+    # case: (speaker on a mesh point?, client isolation on?, phone should find it)
+    "same_router": (False, False, True),
+    "across_mesh": (True, False, True),
+    "client_isolation": (False, True, False),
+}
+
+
+def mdns(dev_client, *args: str, background: bool = False):
+    cmd = ns_prefix(dev_client.namespace) + [sys.executable, "-m", "testbed.mdns", *args]
+    if background:
+        return subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                                text=True)
+    proc = subprocess.run(cmd, cwd=REPO_ROOT, capture_output=True, text=True, timeout=30)
+    return json.loads(proc.stdout) if proc.returncode == 0 and proc.stdout.strip() else []
+
+
+def discover_speaker(phone, speaker, speaker_ip: str, phone_ip: str) -> list[dict]:
+    responder = mdns(speaker, "respond", "--ip", speaker_ip, "--host", "speaker",
+                     "--name", "Living room speaker", "--seconds", "15", background=True)
+    try:
+        time.sleep(0.5)  # let the speaker start listening
+        return mdns(phone, "browse", "--ip", phone_ip, "--seconds", "3")
+    finally:
+        responder.terminate()
+        responder.wait(timeout=5)
+
+
+@pytest.mark.parametrize("case", list(DISCOVERY))
+def test_discovery(case, fresh, home_lab, inventory, artifacts, attach, capture, record_property):
+    """The phone looks for something to cast to, like a casting app does (mDNS). It must find
+    the speaker on the same router and across a mesh point. With client isolation on (guest-network
+    style) it must not, and after isolation is turned off it must again: the classic "my phone
+    can't find the speaker" ticket, broken and fixed on purpose."""
+    gw = inventory.lab["gateway"]
+    on_mesh, isolated, should_find = DISCOVERY[case]
+    ap = home_lab.config("transition")
+    if on_mesh:
+        bssids = home_lab.start_all("transition")
+    else:
+        bssids = {home_lab.router_name: home_lab.only_router(ap, ap_isolate=isolated)}
+    results = join_devices(fresh, ["phone", "speaker"], ap, gw, artifacts)
+    failed = {n: r.failed_stage for n, r in results.items() if not r.passed}
+    assert not failed, f"devices failed to join: {failed}"
+    phone, speaker = fresh["phone"][0], fresh["speaker"][0]
+    if on_mesh:
+        mesh = list(bssids)[1]
+        put_on(home_lab, phone, home_lab.router_name, bssids)
+        put_on(home_lab, speaker, mesh, bssids)
+    where = {n: home_lab.ap_for_bssid(fresh[n][0].current_bssid()) for n in ("phone", "speaker")}
+    ips = {n: r.ip for n, r in results.items()}
+
+    found = discover_speaker(phone, speaker, ips["speaker"], ips["phone"])
+    reaches = phone.ping(ips["speaker"], 2)
+    result = {"case": case, "connected_to": where, "ips": ips, "found": found,
+              "phone_pings_speaker": reaches}
+    if isolated:
+        home_lab.only_router(ap, ap_isolate=False)  # the fix: turn isolation off
+        after = join_devices(fresh, ["phone", "speaker"], ap, gw, artifacts / "fixed")
+        ips_after = {n: r.ip for n, r in after.items()}
+        result["after_fix"] = {"joined": {n: r.passed for n, r in after.items()},
+                               "found": discover_speaker(phone, speaker, ips_after["speaker"],
+                                                         ips_after["phone"])}
+    (artifacts / "discovery.json").write_text(json.dumps(result, indent=2))
+    attach(artifacts / "discovery.json")
+    record_property("found", [f["instance"] for f in found])
+
+    speaker_found = [f for f in found if f.get("address") == ips["speaker"]]
+    if should_find:
+        assert speaker_found, f"phone on {where['phone']} did not find the speaker on " \
+                              f"{where['speaker']}: {found}"
+    else:
+        assert not speaker_found, f"client isolation is on but the phone still found the speaker: {found}"
+        assert not reaches, "client isolation is on but the phone can still ping the speaker"
+        fix = result["after_fix"]
+        assert all(fix["joined"].values()), f"devices failed to rejoin after the fix: {fix}"
+        assert fix["found"], "isolation turned off, but the phone still cannot find the speaker"

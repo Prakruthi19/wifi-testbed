@@ -28,6 +28,7 @@ from pathlib import Path
 from testbed.ap import HostAP
 from testbed.matrix import CLIENT_PROFILES, ApConfig, ClientProfile, Expectation, expected
 from testbed.network import Dnsmasq, Subnet
+from testbed.steering import btm_candidate, neighbor_element
 from testbed.util import run
 
 # 2.4 GHz channels 1-11 in MHz: what a device with only a 2.4 GHz radio may use.
@@ -229,21 +230,46 @@ class HomeLab:
         return home_ap(security, channel or self.channels[name or self.router_name], self.ssid,
                        self.passphrase)
 
-    def start(self, name: str, ap: ApConfig, deny_macs: list[str] | None = None) -> str:
-        """Start (or keep) one AP with these settings; returns its BSSID."""
-        params = {**ap.template_params(), "bridge": self.BRIDGE, "deny_macs": deny_macs or []}
+    def start(self, name: str, ap: ApConfig, deny_macs: list[str] | None = None,
+              **features) -> str:
+        """Start (or keep) one AP with these settings; returns its BSSID.
+        features: rrm (802.11k), bss_transition (802.11v), ap_isolate (client isolation)."""
+        params = {**ap.template_params(), "bridge": self.BRIDGE, "deny_macs": deny_macs or [],
+                  **features}
         self.aps[name].ensure(**params)
         return self.bssid(name)
 
-    def start_all(self, security: str = "transition") -> dict[str, str]:
+    def start_all(self, security: str = "transition", **features) -> dict[str, str]:
         """Every AP on its own channel with the same name and security; returns name -> BSSID."""
-        return {name: self.start(name, self.config(security, name=name)) for name in self.aps}
+        return {name: self.start(name, self.config(security, name=name), **features)
+                for name in self.aps}
 
-    def only_router(self, ap: ApConfig, deny_macs: list[str] | None = None) -> str:
+    def only_router(self, ap: ApConfig, deny_macs: list[str] | None = None, **features) -> str:
         for name, hostap in self.aps.items():
             if name != self.router_name:
                 hostap.stop()
-        return self.start(self.router_name, ap, deny_macs)
+        return self.start(self.router_name, ap, deny_macs, **features)
+
+    def set_neighbors(self) -> dict[str, list[str]]:
+        """802.11k: tell every AP about the other APs of the network (what a mesh controller
+        does). Returns AP name -> the neighbor BSSIDs it was given."""
+        given = {}
+        for name, hostap in self.aps.items():
+            given[name] = []
+            for other in self.aps:
+                if other == name or not self.aps[other].enabled():
+                    continue
+                bssid = self.bssid(other)
+                nr = neighbor_element(bssid, self.channels[other])
+                hostap.cli("set_neighbor", bssid, f'ssid="{self.ssid}"', f"nr={nr}")
+                given[name].append(bssid)
+        return given
+
+    def steer(self, name: str, sta_mac: str, target_bssid: str, target_channel: int) -> str:
+        """802.11v: AP `name` asks the device to move to `target_bssid`. Returns hostapd's answer
+        to the command (OK/FAIL); the device's reply arrives later as BSS-TM-RESP in the log."""
+        return self.aps[name].cli("bss_tm_req", sta_mac, "pref=1", "abridged=1",
+                                  f"neighbor={btm_candidate(target_bssid, target_channel)}").strip()
 
     def stop(self, name: str) -> None:
         self.aps[name].stop()
