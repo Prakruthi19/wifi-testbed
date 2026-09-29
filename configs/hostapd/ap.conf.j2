@@ -1,5 +1,9 @@
 # Rendered by testbed/ap.py -- single-BSS AP for Modules 1 and 2.
 interface={{ iface }}
+{% if bridge is defined and bridge %}
+# Home network: every AP is bridged into one network, so a device keeps its address.
+bridge={{ bridge }}
+{% endif %}
 driver=nl80211
 ctrl_interface={{ ctrl_dir }}
 ctrl_interface_group=0
@@ -27,6 +31,17 @@ wpa_passphrase={{ passphrase }}
 {% endif %}
 {% if "SAE" in key_mgmt.split() %}
 sae_password={{ sae_password or passphrase }}
+{% endif %}
+{% if "WPA-EAP" in key_mgmt.split() %}
+# 802.1X: hostapd's built-in EAP server stands in for a RADIUS server.
+ieee8021x=1
+eap_server=1
+eap_user_file={{ eap_user_file }}
+{% if eap_cert is defined and eap_cert %}
+ca_cert={{ eap_cert.cert }}
+server_cert={{ eap_cert.cert }}
+private_key={{ eap_cert.key }}
+{% endif %}
 {% endif %}
 {% else %}
 # Open network

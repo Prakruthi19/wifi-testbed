@@ -61,12 +61,20 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 ## 5. MAC blocked
 
 * **Induce:** client MAC in hostapd `deny_mac_file`.
-* **Expected stage:** `authentication`
-* **Expected frames:** Auth Req (Open) -> Auth Resp with non-zero status (expected 1,
-  unspecified failure), repeated.
-* **Filter:** `wlan.fc.type_subtype == 0x0b && wlan.fixed.status_code != 0`
-* **Observed:** _TBD_
-* **Status:** hypothesis
+* **Expected stage:** `network_selection` (changed from `authentication` after the first run)
+* **Expected frames:** Probe Requests from the client with no Probe Response to it, and no
+  Authentication frames at all. The AP stays silent towards the denied MAC, so the client
+  never picks the network.
+* **Filter:** `wlan.sa == <client MAC> || wlan.da == <client MAC>`
+* **Observed (2026-09-27, first run):** classifier said `network_selection`: "client never
+  attempted authentication or association". The last probe frames were four Probe Requests
+  from the client to broadcast with no Probe Response, and no Authentication frames. Not yet
+  cross-checked against the wpa_supplicant log or opened in Wireshark.
+* **Other APs:** many vendors answer a blocked MAC with an Authentication Response carrying a
+  non-zero status (e.g. 1, unspecified failure) instead; that is an `authentication` failure.
+  The classifier handles both (unit test `test_mac_blocked_is_authentication`); the expected
+  stage here is for hostapd.
+* **Status:** observed once, pcap review pending
 
 ## 6. DHCP server down
 
@@ -74,7 +82,10 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 * **Expected stage:** `dhcp`
 * **Expected frames:** full join (M1-M4) -> DHCP Discover repeated, no Offer.
 * **Filter:** `dhcp` (with decryption on)
-* **Observed:** _TBD_
+* **Observed (2026-09-27, first run):** dhclient log showed DHCPDISCOVER repeated with no
+  Offer, as expected, but the test crashed: dhclient outlived the harness's subprocess
+  timeout and `TimeoutExpired` was not caught. Fixed in `WifiClient.dhcp()`, which now
+  treats the timeout as "no lease" and deletes old leases first. Re-run pending.
 * **Status:** hypothesis
 
 ## 7. DNS broken
@@ -84,6 +95,21 @@ Classifier stages, in join order: `network_selection`, `authentication`, `associ
 * **Expected frames:** join + DHCP DORA -> DNS query for `gw.lab` -> ICMP port unreachable,
   no DNS response.
 * **Filter:** `dns || icmp.type == 3`
+* **Observed:** _TBD_
+* **Status:** hypothesis
+
+---
+
+## 8. 802.1X wrong password / untrusted server (tests/test_enterprise.py)
+
+* **Induce:** WPA2-Enterprise AP (hostapd built-in EAP server); client uses the wrong password
+  (EAP-PWD or PEAP-MSCHAPv2), or trusts a different CA than the server certificate's.
+* **Expected stage:** `eap` (after association, before the 4-way handshake)
+* **Expected frames:** Open System auth OK -> association OK -> EAP Request/Response
+  (Identity, then the method) -> EAP-Failure (code 4) from the AP; no EAPOL-Key frames.
+  Untrusted server: TLS exchange inside EAP stops; client log has
+  `CTRL-EVENT-EAP-TLS-CERT-ERROR`.
+* **Filter:** `eap || eapol`
 * **Observed:** _TBD_
 * **Status:** hypothesis
 
@@ -102,5 +128,5 @@ python -m classifier.classify_join captures/external/wpa-Induction.pcap --wpa-pw
 | Capture | Ground truth | Classifier output | Correct? | Notes |
 |---|---|---|---|---|
 | wpa-Induction.pcap | successful WPA2-PSK join | _TBD_ | | |
-| wpa-eap-tls.pcap.gz | 802.1X/EAP-TLS join | _TBD_ | | EAP stages are not modelled; expect a gap |
+| wpa-eap-tls.pcap.gz | 802.1X/EAP-TLS join | _TBD_ | | EAP is now modelled (`eap` stage); decrypting needs the PMK, which the sample page may not give |
 | _add more_ | | | | |

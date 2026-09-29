@@ -17,7 +17,20 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | &nbsp;&nbsp;qualify_ap | 6-step baseline for each AP in `lab/inventory.yaml` | `-m qualify` |
 | 2. Capture diagnosis | induces 7 failure types, classifies each pcap by failure stage | `-m failures` |
 | 3. VLAN segmentation | 3 SSIDs -> 3 VLANs, nftables isolation tests | `-m vlan` |
-| 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network | `-m android` (host) |
+| 4. Android (ADB) | reconnect, airplane mode, dumpsys parsing, degraded network; join a named network by command, wrong password named by stage from logcat, bugreport on failure | `-m android` (host) |
+| Performance | iperf3 TCP uplink/downlink (WPA2 ch6, WPA3 ch36), UDP jitter/loss, ping latency | `-m perf` |
+| Fault injection | AP kicks the client (deauth), wpa_supplicant crash + restart, link drop, AP switches to WPA3-only under a WPA2-only client | `-m faults` |
+| Smart-home behaviours | recovery after router reboot, old password after a password change, 2.4 GHz-only device vs 5 GHz AP | `-m smarthome` |
+| Enterprise (802.1X) | username/password login via hostapd's built-in EAP server (EAP-PWD, PEAP-MSCHAPv2): success, wrong password, untrusted server certificate; failures named at the `eap` stage | `-m enterprise` |
+| Roaming | client moves between two APs of one network: full re-auth vs 802.11r Fast Transition; roam time, ping loss, IP kept, auth type and 4-way handshake checked in the capture | `-m roam` (needs `ROAM=1` setup) |
+| Home network | main router + 2 mesh points (one Wi-Fi name, bridged) and 5 device types (phone, laptop, camera, plug, speaker): everyone joins at once, mesh walk, mesh point switched off, interop (device x WPA2/WPA3/mixed/5 GHz, expected results written first, capture cross-check), busy house (download + camera stream + ping delay), 7 troubleshooting cases that break one thing, check the plain-words diagnosis, fix it and rejoin | `-m home` (needs `HOMENET=1` setup) |
+| WPA3 decryption | WPA3-SAE capture decrypted with the session PMK from the client log (`wpa_supplicant -K`), so the classifier sees DHCP/DNS; the passphrase alone must not work | `-m decrypt` |
+| Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
+
+Designed, not run (no hardware yet): `testbed/openwrt.py` (configure a real OpenWrt AP from the
+same `ApConfig`), `testbed/attenuator.py` + `tests/test_rvr.py`, `lab/monitor_capture.sh`
+(over-the-air capture with a monitor-mode USB adapter). Bug reports: `python -m testbed.bug_draft
+reports/artifacts/<test>` drafts one from a failed test's artifacts.
 
 See [docs/test-plan.md](docs/test-plan.md) for the matrix and expected results,
 [docs/failure-signatures.md](docs/failure-signatures.md) for the failure catalog, and
@@ -90,7 +103,24 @@ $PYTEST -m matrix                        # full Module 1 matrix (100 cases x 5 j
 $PYTEST -m matrix --channels 6,36 --repeats 2   # quick subset
 $PYTEST -m failures                      # Module 2
 $PYTEST -m vlan                          # Module 3
+$PYTEST -m perf                          # iperf3 throughput
+$PYTEST -m smarthome                     # IoT device behaviours
+$PYTEST -m faults                        # fault injection while connected
+$PYTEST -m "enterprise or decrypt"       # 802.1X login, WPA3 capture decryption
+sudo ROAM=1 lab/setup_lab.sh && $PYTEST -m roam   # roaming needs the extra AP radio (ap1)
+sudo HOMENET=1 lab/setup_lab.sh && $PYTEST -m home # home network: ap1, ap2, sta1..sta5
+                                         # (also runs every other suite, roam included)
+.venv/bin/python -m testbed.home --plan  # expected interop results, before running
+
+sudo lab/repeat.sh 3 -m failures         # repeatability: 3 runs, list tests that flip
+sudo .venv/bin/python -m testbed.preflight --clean   # environment check, stop stray daemons
+.venv/bin/python -m testbed.compare reports/baseline/junit.xml reports/junit.xml  # regressions
 ```
+
+Every lab run also rebuilds `reports/dashboard.html`: one page with the latest result of every
+test grouped by suite, what each recorded (stage, roam time, throughput), the classifier's
+verdict, links to its pcap and logs, and dots for earlier runs so flaky tests stand out
+(`python -m testbed.dashboard` rebuilds it by hand; delete `reports/history` to start fresh).
 
 Every run writes `reports/junit.xml`, `reports/report.html` (with the connectivity matrix in the
 summary and logs/pcaps linked per test), `reports/matrix.html`, and
@@ -101,6 +131,9 @@ Classify any capture directly:
 ```bash
 .venv/bin/python -m classifier.classify_join reports/artifacts/<test>/capture.pcap \
     --wpa-pwd labpassword123:lab-diag
+# WPA3-SAE / 802.1X: the passphrase is not enough; use that session's PMK from the client log
+.venv/bin/python -m classifier.classify_join capture.pcap \
+    --pmk "$(.venv/bin/python -c 'import sys; from testbed.client import session_pmk; print(session_pmk(open(sys.argv[1]).read()))' wpa_supplicant-client1.log)"
 ```
 
 ### Android (host, not the VM)
@@ -111,6 +144,12 @@ on the host:
 ```bash
 python -m venv .venv && .venv/bin/pip install -r requirements.txt
 .venv/bin/pytest -m android [--android-serial emulator-5554] [--android-ping-host 8.8.8.8]
+
+# Join tests: the phone joins a named network by command; the wrong-password test needs a
+# secured network, so use a real phone over USB (not ADB over Wi-Fi: forgetting the network
+# would cut the ADB link).
+.venv/bin/pytest -m android --android-ssid HomeNet --android-security wpa2 \
+    --android-psk '<password>' [--android-bugreport]
 ```
 
 Android tests are deselected unless you pass `-m android`, so they stay out of VM runs.
@@ -123,13 +162,40 @@ labels for severity (`sev:1`-`sev:4`) and status (`new`, `confirmed`, `fixed`, `
 When a bug is fixed, add a regression test and link it from the issue. Many bugs will be in the
 harness or configs, and those count too.
 
+## Verification status
+
+What has actually been run, and where. Update this after every lab run.
+
+| Suite | Last run | Result |
+|---|---|---|
+| `tests/unit` | every commit | all pass (no lab needed) |
+| `-m failures` | 2026-09-27, Ubuntu 24.04 VM | 6/8 before the fixes for issues #3-#5; not yet re-run with them |
+| `-m perf`, `-m faults`, `-m smarthome`, `-m matrix`, `-m qualify`, `-m vlan` | not run yet | written only |
+| `-m enterprise`, `-m decrypt`, `-m roam` | 2026-09-28, Ubuntu 24.04 VM | 8/8 pass after three fixes found by the first run (802.1X PMK log line, leftover dhclient, stale scan entry before an FT roam). FT roam 57 ms vs full re-auth 159 ms (from the client log; virtual radios) |
+| `-m "failures or enterprise or decrypt or roam"` (one combined run) | 2026-09-28, Ubuntu 24.04 VM | 16/16 pass. An earlier combined run failed 5 tests because a client radio stayed busy (scan EBUSY) after the mac_blocked case; fixed by resetting the client interface on disconnect |
+| `-m home` | 2026-09-29, Ubuntu 24.04 VM | 15/15 pass: 14 in one full run, busy_house on its own after installing iperf3. First run failed every DHCP request (dnsmasq checks each address with a ping before offering it, one device at a time: 5 devices waited up to 15 s, fixed with `no-ping`). An earlier run had phone and camera lose the connection when the router restarted the 4-way handshake right after it finished; it did not recur and its cause is not known (the router's log is now saved per test) |
+| `-m android` | not run (no device) | written only |
+| `-m rf`, `testbed/openwrt.py`, `lab/monitor_capture.sh` | not run (no hardware) | designed only |
+
+Performance numbers from `-m perf` are virtual-network measurements (emulated radios in one VM).
+They are stamped as such in every saved result and are not Wi-Fi performance figures.
+
 ## Limitations
 
 * The RF layer is emulated, so the lab has no signal level, interference, or roaming under
-  fading.
+  fading. Roaming here is triggered by command (`wpa_cli roam`), not by the signal getting
+  weaker, so it tests the handover itself, not the client's decision of when to roam.
+* The home network's mesh points share one bridge, like mesh units with an Ethernet backhaul;
+  the wireless link between real mesh units is not emulated, and each fake radio runs one band
+  at a time (a real router runs 2.4 and 5 GHz together).
+* 802.1X uses hostapd's built-in EAP server, not a separate RADIUS server, so AP-to-RADIUS
+  problems (shared secret, server unreachable, timeouts) are not covered.
 * It covers one driver (`mac80211_hwsim`) and one AP/client software stack
   (hostapd/wpa_supplicant).
-* The Android emulator can only join its built-in `AndroidWifi` network, so Module 4 tests
-  client state handling, not the security matrix.
+* The Android emulator can only join its built-in `AndroidWifi` network, and it runs on the
+  host while the emulated radios live in the VM, so no phone ever joins the lab AP. The join
+  tests run against whatever network the phone can see (e.g. home Wi-Fi), not the lab matrix.
+* Throughput over emulated radios measures the software path, not air speed; it is a smoke
+  test and a regression baseline only.
 * Expected failure stages in Module 2 stay hypotheses until they're confirmed against captures
   (see the status field in `docs/failure-signatures.md`).
