@@ -215,7 +215,10 @@ class HomeLab:
     def up(self) -> None:
         br = self.BRIDGE
         run(["ip", "addr", "flush", "dev", self.aps[self.router_name].iface])
-        run(["ip", "link", "add", br, "type", "bridge"])
+        # No spanning tree and no forward delay: a port added by hostapd must pass traffic at once.
+        # First lab run (2026-09-29): DHCP requests reached dnsmasq ~15 s after the devices
+        # joined (the default forward delay), after every device had already given up.
+        run(["ip", "link", "add", br, "type", "bridge", "stp_state", "0", "forward_delay", "0"])
         run(["ip", "addr", "add", self.base_cidr, "dev", br])
         run(["ip", "link", "set", br, "up"])
         run(["sysctl", "-qw", "net.bridge.bridge-nf-call-iptables=0"], check=False)
