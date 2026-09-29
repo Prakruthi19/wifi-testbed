@@ -11,9 +11,9 @@
 6. troubleshooting     break one thing, check the diagnosis names the cause in plain words,
                        apply the fix, and check the device joins
 7. router-assisted     802.11k: the phone asks for the list of nearby APs and gets the other two.
-   roaming             802.11v: the router asks the phone to move; a plain request is recorded
-                       (the phone may stay), "you will be dropped" must move it to the mesh
-                       point, and a missing AP must not pull it off the router
+   roaming             802.11v: the router asks the phone to move; to an equal mesh point it
+                       stays (recorded), to a faster 5 GHz mesh point it must move, and a
+                       missing AP must not pull it off the router
 8. device discovery    the phone finds the speaker by mDNS (like a casting app) on one router and
                        across a mesh point; with client isolation on it cannot, and can again
                        once isolation is off
@@ -472,42 +472,49 @@ def test_neighbor_report(fresh, home_lab, inventory, artifacts, attach, capture,
 
 
 STEERING = {
-    # case: (target is a real mesh point?, "disassociation imminent" set?)
-    # A plain request is a suggestion: the device may stay if the target is not clearly better.
-    # "Disassociation imminent" says "you will be dropped soon", so the device must go.
-    "suggestion": (True, False),
-    "to_mesh_point": (True, True),
-    "to_missing_ap": (False, False),  # router names an AP that is not there
+    # case: (target is a real mesh point?, target on a faster 5 GHz 40 MHz channel?)
+    # Only the target's speed differs between the first two: the phone moves only when the
+    # target is better.
+    "equal_mesh_point": (True, False),
+    "faster_5ghz_mesh_point": (True, True),
+    "missing_ap": (False, False),  # router names an AP that is not there
 }
+BAND_STEER_CHANNEL = 36  # with ht_capab [HT40+]: 40 MHz wide
 
 
 @pytest.mark.parametrize("case", list(STEERING))
 def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, record_property):
-    """802.11v: the router asks the phone to move.
+    """802.11v: the router asks the phone to move to a mesh point.
 
-    First lab run (2026-09-29): to a real mesh point AND to a missing AP, the phone answered
-    status 0 with target_bssid = the router it was already on, i.e. "I'll stay". A plain
-    request is only a suggestion, and every fake radio has the same signal, so the mesh point
-    is never better than where the phone is (inferred from wpa_supplicant's roaming rule; the
-    phone's log is now saved to confirm it). So the cases are:
-    - suggestion: recorded, not judged; the phone must answer and stay online
-    - to_mesh_point: "disassociation imminent" set, so the phone must move there and keep its
-      address
-    - to_missing_ap: the phone must not claim to go there, and must stay online on the router
+    What the lab showed (2026-09-29): the phone does not simply obey. wpa_supplicant compares
+    the requested AP with the one it is on by estimated throughput, and stays if the target is
+    not better. Its log: "B is best, A: <mesh> est-tput: 65000  B: <router> est-tput: 65000",
+    then "Already associated with the preferred candidate", answered as status 0 with
+    target_bssid = the router. Every AP here was 2.4 GHz, 20 MHz, same signal, so the mesh
+    point was never better, even with "disassociation imminent" set.
+    - equal_mesh_point: plain request to an equal AP; recorded (expected: stays), must stay online
+    - faster_5ghz_mesh_point: the mesh point runs on 5 GHz, 40 MHz wide (band steering, what
+      dual-band routers do); the phone must accept, move there and keep its address
+    - missing_ap: the phone must not claim the missing AP and must stay on the router
     """
     gw = inventory.lab["gateway"]
-    real_target, imminent = STEERING[case]
+    real_target, faster = STEERING[case]
     bssids = home_lab.start_all("transition", rrm=True, bss_transition=True)
+    mesh = list(bssids)[1]
+    if faster:
+        home_lab.start(mesh, home_lab.config("transition", BAND_STEER_CHANNEL), rrm=True,
+                       bss_transition=True, ht_capab="[HT40+]")
     home_lab.set_neighbors()
     ap = home_lab.config("transition")
     phone, profile = fresh["phone"]
-    router, mesh = home_lab.router_name, list(bssids)[1]
+    router = home_lab.router_name
     join = phone.join(ap.ssid, profile.network_for(ap), gateway=gw, artifacts=artifacts)
     assert join.passed, f"phone failed to join at {join.failed_stage}"
     put_on(home_lab, phone, router, bssids)
     ip_before = phone.ipv4()
     if real_target:
-        target, channel = bssids[mesh], home_lab.channels[mesh]
+        target = bssids[mesh]
+        channel = BAND_STEER_CHANNEL if faster else home_lab.channels[mesh]
         phone.scan_for(target, flush=False)  # like a real device, it has seen the mesh point
     else:
         target, channel = "02:00:00:00:99:00", home_lab.channels[mesh]
@@ -517,7 +524,7 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
     phone_log = phone.workdir / f"wpa_supplicant-{phone.name}.log"
     phone_offset = phone_log.stat().st_size
     start = time.monotonic()
-    sent = home_lab.steer(router, phone.mac, target, channel, imminent=imminent)
+    sent = home_lab.steer(router, phone.mac, target, channel)
     responses = wait_for(lambda: parse_btm_responses(log_since(router_log, offset), phone.mac),
                          timeout=10) or []
     moved = bool(wait_for(lambda: phone.current_bssid() == target, timeout=10, interval=0.05)) \
@@ -529,7 +536,7 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
     names = {b: n for n, b in bssids.items()}
     said_go_to = names.get(answer.get("target_bssid"), answer.get("target_bssid"))
 
-    result = {"case": case, "target": target, "disassociation_imminent": imminent,
+    result = {"case": case, "target": target, "target_channel": channel,
               "router_command": sent, "answer": answer or None,
               "answer_in_words": BTM_STATUS.get(status, "no answer") if status is not None else "no answer",
               "phone_said_it_would_go_to": said_go_to,
@@ -540,19 +547,23 @@ def test_steering(case, fresh, home_lab, inventory, artifacts, attach, capture, 
     attach(artifacts / "steering.json")
     # The phone's side of the request (how it picked where to go); its log is replaced at the
     # next join, so keep this test's part.
-    (artifacts / "phone-after-request.log").write_text(log_since(phone_log, phone_offset))
+    phone_side = log_since(phone_log, phone_offset)
+    (artifacts / "phone-after-request.log").write_text(phone_side)
+    result["phone_compared"] = [line.split("WNM: ", 1)[1] for line in phone_side.splitlines()
+                                if "is best" in line or "Already associated" in line]
     attach(artifacts / "phone-after-request.log")
+    (artifacts / "steering.json").write_text(json.dumps(result, indent=2))
     record_property("answer", f"{result['answer_in_words']}, going to {said_go_to}")
     record_property("moved", moved)
 
     assert sent == "OK", f"router refused to send the request ({sent!r}): is bss_transition on?"
     assert responses, "phone never answered the transition request"
-    if case == "to_mesh_point":
+    if case == "faster_5ghz_mesh_point":
         assert status == 0, f"phone said no: {result['answer_in_words']} ({answer})"
         assert answer.get("target_bssid") == target, f"phone said it would go to {said_go_to}, not {mesh}"
         assert moved, f"phone said yes but is on {result['now_on']}, not {mesh}"
         assert result["ip_after"] == ip_before, f"address changed: {ip_before} -> {result['ip_after']}"
-    elif case == "to_missing_ap":
+    elif case == "missing_ap":
         assert answer.get("target_bssid") != target, f"phone claimed it would go to a missing AP: {answer}"
         assert result["now_on"] == router, f"phone left the router for {result['now_on']}"
     assert online, f"phone could not reach the router within {MAX_BACK_ONLINE_S}s afterwards"

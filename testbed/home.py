@@ -260,7 +260,8 @@ class HomeLab:
                 if other == name or not self.aps[other].enabled():
                     continue
                 bssid = self.bssid(other)
-                nr = neighbor_element(bssid, self.channels[other])
+                channel = (self.aps[other].current or {}).get("channel", self.channels[other])
+                nr = neighbor_element(bssid, channel)
                 hostap.cli("set_neighbor", bssid, f'ssid="{self.ssid}"', f"nr={nr}")
                 given[name].append(bssid)
         return given
@@ -271,8 +272,9 @@ class HomeLab:
         to the command (OK/FAIL); the device's reply arrives later as BSS-TM-RESP in the log.
 
         imminent: set "disassociation imminent" with a timer of 100 beacons (~10 s): the AP
-        will drop the device, so it must leave. Without it the request is a suggestion and the
-        device may stay if the target is not clearly better."""
+        will drop the device afterwards. The device still decides where to go: wpa_supplicant
+        stays on its current AP if the target's estimated throughput is not higher (seen in the
+        lab, 2026-09-29)."""
         args = ["bss_tm_req", sta_mac, "pref=1", "abridged=1"]
         if imminent:
             args += ["disassoc_imminent=1", "disassoc_timer=100"]
