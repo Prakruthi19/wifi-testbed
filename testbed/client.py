@@ -174,9 +174,7 @@ class WifiClient:
 
     def signal_poll(self) -> dict:
         """RSSI and link rate the driver reports now (wpa_cli signal_poll); {} when not connected."""
-        proc = self.sh("wpa_cli", "-p", str(self.ctrl_dir), "-i", self.iface, "signal_poll",
-                       check=False, timeout=5)
-        return parse_signal_poll(proc.stdout)
+        return parse_signal_poll(self.wpa_cli("signal_poll"))
 
     def ipv4(self) -> str | None:
         out = self.sh("ip", "-4", "-o", "addr", "show", "dev", self.iface, check=False).stdout
