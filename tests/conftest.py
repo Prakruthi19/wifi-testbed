@@ -99,18 +99,32 @@ def attach(request):
 def pytest_runtest_makereport(item, call):
     outcome = yield
     report = outcome.get_result()
-    if report.when != "call":
+    if report.when == "call":
+        item.call_failed = report.failed  # read by fixtures that collect evidence on failure
         return
-    item.call_failed = report.failed  # read by fixtures that collect evidence on failure
+    if report.when != "teardown":
+        return
+    # Links go on the teardown report: fixtures (capture, ap_log) only finish writing and attaching
+    # their files during teardown. pytest-html merges extras from every phase into the test's row.
     try:
         from pytest_html import extras
     except ImportError:
         return
-    extra = getattr(report, "extras", [])
+    from testbed.dashboard import SHOWN_FILES
+
+    # Every evidence file in this test's folder (what the dashboard lists), plus anything attached
+    # from elsewhere.
+    art = ARTIFACTS_DIR / _safe(item.nodeid)
+    files = {p.resolve(): p.name for p in sorted(art.iterdir())
+             if p.is_file() and p.suffix in SHOWN_FILES} if art.is_dir() else {}
     for path, name in item.stash.get(ATTACHMENTS, []):
-        rel = os.path.relpath(path, REPORTS_DIR).replace(os.sep, "/")
+        files.setdefault(Path(path).resolve(), name)
+    extra = getattr(report, "extras", [])
+    failed = getattr(item, "call_failed", False)
+    for path, name in files.items():
+        rel = os.path.relpath(path, REPORTS_DIR.resolve()).replace(os.sep, "/")
         extra.append(extras.url(rel, name=name))
-        if report.failed and path.suffix in (".log", ".txt"):
+        if failed and path.suffix in (".log", ".txt"):
             text = path.read_text(errors="replace").splitlines()[-60:]
             extra.append(extras.text("\n".join(text), name=f"{name} (tail)"))
     report.extras = extra

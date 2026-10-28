@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import signal
+import subprocess
 from pathlib import Path
 
 from testbed.util import log, render, run, wait_for
@@ -61,6 +62,14 @@ class HostAP:
         proc = run(["hostapd_cli", "-p", str(self.ctrl_dir), "-i", self.iface, "status"],
                    check=False, timeout=5)
         return dict(line.split("=", 1) for line in proc.stdout.splitlines() if "=" in line)
+
+    def cli(self, *args: str, timeout: float = 5) -> str:
+        """One hostapd_cli command on this AP; returns its output ("" if hostapd did not answer)."""
+        try:
+            return run(["hostapd_cli", "-p", str(self.ctrl_dir), "-i", self.iface, *args],
+                       check=False, timeout=timeout).stdout
+        except subprocess.TimeoutExpired:
+            return ""
 
     def deauthenticate(self, mac: str) -> None:
         """Kick one client off the AP (sends a Deauthentication frame to it)."""
