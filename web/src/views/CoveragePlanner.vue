@@ -61,6 +61,25 @@ const rssi = (ap: Node, x: number, y: number) => rssiAt(ap, x, y, band.value)
 const best = (x: number, y: number) => bestAt(aps.value, x, y, band.value)
 // Line style for a link: the same thresholds the Health card uses.
 const tier = (dbm: number) => (dbm >= GOOD_DBM ? 'good' : dbm >= USABLE_DBM ? 'weak' : 'bad')
+// A radio wave from device to access point. Its shape carries the strength as well as its colour:
+// good = short, tight, steady waves; weak = long lazy waves; unusable = a flat, broken line.
+const WAVE = { good: { len: 12, amp: 4 }, weak: { len: 28, amp: 7 }, bad: { len: 40, amp: 2 } } as const
+function wave(x1: number, y1: number, x2: number, y2: number, dbm: number) {
+  const { len, amp } = WAVE[tier(dbm)]
+  const dx = x2 - x1
+  const dy = y2 - y1
+  const dist = Math.hypot(dx, dy) || 1
+  const nx = -dy / dist // unit normal to the line
+  const ny = dx / dist
+  const steps = Math.max(8, Math.round(dist / 2))
+  let d = ''
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps
+    const off = amp * Math.sin(Math.PI * t) ** 0.5 * Math.sin((2 * Math.PI * t * dist) / len) // tapers to 0 at both ends
+    d += `${i ? 'L' : 'M'}${(x1 + dx * t + nx * off).toFixed(1)},${(y1 + dy * t + ny * off).toFixed(1)}`
+  }
+  return d
+}
 
 function paint() {
   const el = canvas.value
@@ -380,7 +399,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 
             <!-- links from each parked device to the AP it would use -->
             <template v-for="l in links" :key="'l' + l.d.name">
-              <line v-if="l.b && !l.hidden" :x1="l.d.x" :y1="l.d.y" :x2="l.b.ap.x" :y2="l.b.ap.y"  class="link" :class="tier(l.b.dbm)" />
+              <path v-if="l.b && !l.hidden" :d="wave(l.d.x, l.d.y, l.b.ap.x, l.b.ap.y, l.b.dbm)" class="link" :class="tier(l.b.dbm)" />
             </template>
 
             <g
@@ -432,7 +451,7 @@ function nudge(n: Node, e: KeyboardEvent) {
             <!-- the walking phone -->
             <g v-if="walking" aria-hidden="true">
               <path :d="routePath" class="route" />
-              <line v-if="walk.ap !== null && aps[walk.ap]" :x1="walker.x" :y1="walker.y" :x2="aps[walk.ap].x" :y2="aps[walk.ap].y"  class="link live" :class="tier(walkNow?.dbm ?? -99)" />
+              <path v-if="walk.ap !== null && aps[walk.ap]" :d="wave(walker.x, walker.y, aps[walk.ap].x, aps[walk.ap].y, walkNow?.dbm ?? -99)" class="link live" :class="tier(walkNow?.dbm ?? -99)" />
               <g :transform="`translate(${walker.x},${walker.y})`" class="walker">
                 <circle r="16" :fill="walk.ap !== null ? SERIES[walk.ap] : 'var(--muted)'" />
                 <rect x="-5" y="-9" width="10" height="18" rx="2" class="wphone" />
@@ -511,12 +530,12 @@ function nudge(n: Node, e: KeyboardEvent) {
         </p>
       </section>
       <section class="card">
-        <h2>Lines to access points</h2>
-        <p class="muted small">Each device's line goes to the access point it would use, coloured by how strong that signal is.</p>
+        <h2>Signal waves</h2>
+        <p class="muted small">Each device sends a wave to the access point it uses. The wave's shape and colour show how strong that signal is.</p>
         <ul class="linekey key">
-          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="good" /></svg>Good: −67 dBm or stronger</li>
-          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="weak" /></svg>Weak: −67 to −75 dBm</li>
-          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="bad" /></svg>Unusable: below −75 dBm</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -50)" class="good" /></svg>Good: tight waves, −67 dBm or stronger</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -70)" class="weak" /></svg>Weak: long waves, −67 to −75 dBm</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -90)" class="bad" /></svg>Unusable: flat, broken, below −75 dBm</li>
         </ul>
         <h2 class="spaced">Signal levels</h2>
         <p class="muted small">dBm is the received signal power; closer to 0 is stronger, and every 10 dB less is ten times weaker.</p>
@@ -577,14 +596,19 @@ function nudge(n: Node, e: KeyboardEvent) {
 .win-gap { stroke: var(--card); stroke-width: 4; }
 .win { stroke: var(--window); stroke-width: 2; }
 .door { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; pointer-events: none; }
-.link { pointer-events: none; animation: flow 1.2s linear infinite; stroke-linecap: round; }
-.link.good, .key .good { stroke: var(--pass); stroke-width: 3; stroke-dasharray: 10 4; }
-.link.weak, .key .weak { stroke: var(--skip); stroke-width: 3; stroke-dasharray: 4 5; }
-.link.bad, .key .bad { stroke: var(--fail); stroke-width: 3; stroke-dasharray: 0.5 6; stroke-linecap: round; }
+.link, .key path { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.link { pointer-events: none; animation: flow 1.2s linear infinite; }
+.link.good, .key .good { stroke: var(--pass); stroke-width: 2.5; stroke-dasharray: 18 4; }
+.link.weak, .key .weak { stroke: var(--skip); stroke-width: 2.5; stroke-dasharray: 10 6; }
+.link.bad, .key .bad { stroke: var(--fail); stroke-width: 2.5; stroke-dasharray: 3 7; }
 .link.live { stroke-width: 4; }
 .linekey { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
-.linekey svg { width: 40px; height: 10px; vertical-align: middle; margin-right: 8px; }
-@keyframes flow { to { stroke-dashoffset: -18; } }
+.linekey svg { width: 48px; height: 16px; vertical-align: middle; margin-right: 8px; }
+@keyframes flow { to { stroke-dashoffset: -22; } }
+@keyframes flow-weak { to { stroke-dashoffset: -16; } }
+@keyframes flow-bad { to { stroke-dashoffset: -10; } }
+.link.weak { animation: flow-weak 1.6s linear infinite; }
+.link.bad { animation: flow-bad 2s linear infinite; }
 .node { cursor: grab; outline: none; }
 .node:active { cursor: grabbing; }
 .node:focus-visible .badge, .node:focus-visible .apdot { stroke: var(--ink); stroke-width: 3; }
@@ -606,7 +630,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .nsub { fill: var(--ink); font-size: 11px; paint-order: stroke; stroke: var(--card); stroke-width: 3px; }
 @media (prefers-reduced-motion: reduce) {
   .ripple { display: none; }
-  .link { animation: none; }
+  .link, .link.weak, .link.bad { animation: none; }
 }
 /* On phones the plan shrinks to ~40% size, so labels are drawn bigger and the per-device line moves to the list. */
 @media (max-width: 640px) {

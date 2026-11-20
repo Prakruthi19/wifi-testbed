@@ -1,4 +1,7 @@
-import { test, expect } from '@playwright/test'
+import { test, expect, type Page } from '@playwright/test'
+
+// One row per home, in whichever view is showing (a table on desktop, cards on phones).
+const homes = (page: Page) => page.locator('table[aria-label="Homes"] tbody tr, ul[aria-label="Homes"] > li')
 
 test('lab overview lists the access points from the inventory', async ({ page }) => {
   await page.goto('/')
@@ -9,7 +12,9 @@ test('lab overview lists the access points from the inventory', async ({ page })
 
 test('placeholder data is labelled as not real', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('note')).toBeVisible()
+  const chip = page.getByText('Sample data', { exact: true })
+  await expect(chip).toBeVisible()
+  await expect(chip).toHaveAttribute('title', /not results from a real lab run/)
 })
 
 test('runs list opens a run with failures first and a join timeline', async ({ page }) => {
@@ -96,8 +101,9 @@ test('coverage planner: walking the phone on 5 GHz roams to a mesh point', async
 
 test('sites portal: lists every home, worst first, and says which are simulated', async ({ page }) => {
   await page.goto('/#/sites')
+  await page.getByText('About this data').click()
   await expect(page.getByText(/Only "Lab home" comes from the test bed/)).toBeVisible()
-  const cards = page.getByRole('list', { name: 'Sites' }).getByRole('listitem')
+  const cards = homes(page)
   await expect(cards).toHaveCount(8)
   await expect(cards.first()).toContainText('Offline')
   await expect(cards.filter({ hasText: 'Lab home' })).toContainText('Healthy')
@@ -113,7 +119,7 @@ test('sites portal: switching a mesh point off on a home updates the overview', 
   await page.getByRole('checkbox', { name: /mesh-1/ }).uncheck()
   await expect(page.locator('.issues')).toContainText('mesh-1 is offline')
   await page.getByRole('link', { name: /All sites/ }).click()
-  const maple = page.getByRole('list', { name: 'Sites' }).getByRole('listitem').filter({ hasText: '12 Maple Street' })
+  const maple = homes(page).filter({ hasText: '12 Maple Street' })
   await expect(maple).toContainText('Degraded')
   await expect(page.getByRole('list', { name: /Recent changes/ })).toContainText('mesh-1 is offline')
 })
@@ -124,7 +130,27 @@ test('floor plan lines agree with the Health card whatever floor band is shown',
   for (const band of ['2.4 GHz', '5 GHz']) {
     await page.getByRole('button', { name: band, exact: true }).click()
     await expect(page.locator('g.device[aria-label^="laptop:"]')).toHaveAttribute('aria-label', /laptop: -\d+ dBm on 5 GHz via router/)
-    await expect(page.locator('line.link.weak')).toHaveCount(3)
+    await expect(page.locator('path.link.weak')).toHaveCount(3)
+  }
+})
+
+test('dashboard: sidebar collapses, theme switches, and the homes view toggles', async ({ page, isMobile }) => {
+  await page.goto('/#/sites')
+  await page.getByRole('button', { name: 'Table', exact: true }).click()
+  await expect(page.getByRole('table', { name: 'Homes' })).toBeVisible()
+  await page.getByRole('button', { name: 'Cards', exact: true }).click()
+  await expect(page.getByRole('list', { name: 'Homes' })).toBeVisible()
+  await expect(homes(page)).toHaveCount(8)
+  await page.getByRole('button', { name: 'Theme: match system' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light')
+  await page.getByRole('button', { name: 'Theme: light' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark')
+  await page.getByRole('navigation').getByRole('link', { name: 'Test runs' }).click()
+  await expect(page).toHaveURL(/#\/runs/)
+  if (!isMobile) {
+    await page.getByRole('button', { name: 'Collapse menu' }).click()
+    await expect(page.getByRole('button', { name: 'Expand menu' })).toBeVisible()
+    await expect(page.getByRole('navigation').getByText('Test runs')).toBeHidden()
   }
 })
 

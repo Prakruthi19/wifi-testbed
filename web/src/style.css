@@ -8,8 +8,9 @@
   --floor-carpet: #eee9f2; --furniture: #ddd6cb; --furniture-edge: #a99f90; --window: #8fc1ea;
   color-scheme: light dark;
 }
+/* Dark colours: follow the system unless the person picked a theme in the top bar. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme='light']) {
     --bg: #131417; --card: #1c1e22; --ink: #eceef2; --muted: #9da3ad; --line: #30333a;
     --accent: #7ea3ff; --accent-ink: #0d1430;
     --pass: #7fd49a; --pass-bg: #1c3324; --fail: #ff8f86; --fail-bg: #3a1f1d;
@@ -19,6 +20,17 @@
     --floor-carpet: #28242d; --furniture: #3b3731; --furniture-edge: #5f584e; --window: #4f86b3;
   }
 }
+:root[data-theme='dark'] {
+    --bg: #131417; --card: #1c1e22; --ink: #eceef2; --muted: #9da3ad; --line: #30333a;
+    --accent: #7ea3ff; --accent-ink: #0d1430;
+    --pass: #7fd49a; --pass-bg: #1c3324; --fail: #ff8f86; --fail-bg: #3a1f1d;
+    --skip: #e0cc7a; --skip-bg: #332d17; --todo: #4a4e57;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
+    --floor-wood: #2a251f; --floor-wood-line: #352f27; --floor-tile: #23272b; --floor-tile-line: #2d3237;
+    --floor-carpet: #28242d; --furniture: #3b3731; --furniture-edge: #5f584e; --window: #4f86b3;
+    color-scheme: dark;
+}
+:root[data-theme='light'] { color-scheme: light; }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 15px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
 a { color: var(--accent); }
