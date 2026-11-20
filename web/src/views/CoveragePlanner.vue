@@ -209,21 +209,26 @@ const roams = computed(() => walk.log.filter((l) => l.kind === 'roam').length)
 const apNames = computed(() => aps.value.map((a) => a.name))
 
 // --- Static devices --------------------------------------------------------------------------------
+// Each device's line and label use the band that device actually picks (the same rule as the Health
+// card), so the map and the Health card always agree. The band buttons only change the floor colours.
 const links = computed(() =>
-  devices.value.map((d) => {
-    if (!d.on) return { d, b: null, text: 'offline (not seen)', usable: false, hidden: false }
-    const fiveOnly = band.value === '5' && d.bands && !d.bands.includes('5')
-    const b = fiveOnly ? null : best(d.x, d.y)
-    const usable = b && b.dbm >= -75
-    return {
-      d,
-      b,
-      text: fiveOnly ? 'no 5 GHz radio' : !b ? 'no AP on' : `${Math.round(b.dbm)} dBm via ${b.ap.name}`,
-      usable,
-      hidden: walking.value && d.icon === 'phone', // the walking phone replaces the parked one
-    }
+  devices.value.map((d, i) => {
+    const st = health.value?.devices[i]
+    const hidden = walking.value && d.icon === 'phone' // the walking phone replaces the parked one
+    const ap = aps.value.find((a) => a.name === st?.ap) ?? null
+    const b = ap && st?.dbm != null ? { ap, dbm: st.dbm } : null
+    const dbm = b ? `${Math.round(b.dbm)} dBm on ${st!.band} GHz` : ''
+    const text = !st || st.state === 'not seen' ? 'offline (not seen)'
+      : !b ? 'no access point on'
+      : st.state === 'no internet' ? `${dbm}, but no internet (router off)`
+      : `${dbm} via ${ap!.name}`
+    return { d, b, text, usable: !!b && b.dbm >= USABLE_DBM && st!.state !== 'no internet', hidden }
   }),
 )
+
+// Labels near the left or right wall grow inwards so they are never cut off at the edge.
+const labelAnchor = (x: number) => (x < 140 ? 'start' : x > 580 ? 'end' : 'middle')
+const labelX = (x: number) => (x < 140 ? -15 : x > 580 ? 15 : 0)
 
 const coverage = computed(() => {
   const counts = LEVELS.map(() => 0)
@@ -293,7 +298,8 @@ function nudge(n: Node, e: KeyboardEvent) {
     <div>
       <section class="card plan">
         <div class="toolbar">
-          <div role="group" aria-label="Band" class="segs">
+          <span class="seglabel" id="floor-band">Floor colours:</span>
+          <div role="group" aria-labelledby="floor-band" class="segs">
             <button v-for="b in (['2.4', '5'] as Band[])" :key="b" type="button" class="seg" :aria-pressed="band === b" @click="band = b">
               {{ BAND_MODEL[b].label }}
             </button>
@@ -400,8 +406,8 @@ function nudge(n: Node, e: KeyboardEvent) {
                 <template v-else-if="d.icon === 'tablet'"><rect x="-7" y="-9" width="14" height="18" rx="2" /><circle cy="6" r="0.8" /></template>
                 <rect v-else x="-6" y="-6" width="12" height="12" rx="2" />
               </g>
-              <text y="28" text-anchor="middle" class="nlabel">{{ d.name }}</text>
-              <text y="41" text-anchor="middle" class="nsub">{{ links[i]?.text }}</text>
+              <text y="28" :x="labelX(d.x)" :text-anchor="labelAnchor(d.x)" class="nlabel">{{ d.name }}</text>
+              <text y="41" :x="labelX(d.x)" :text-anchor="labelAnchor(d.x)" class="nsub">{{ links[i]?.text }}</text>
             </g>
 
             <g
@@ -499,8 +505,9 @@ function nudge(n: Node, e: KeyboardEvent) {
           <li v-for="i in health.issues" :key="i.key" :class="i.severity">{{ i.text }}</li>
         </ul>
         <p class="muted small">
-          Status comes from the model, not real radios. Devices with a 5 GHz radio use 5 GHz while it is decent and fall back
-          to 2.4 GHz otherwise. Switch boxes on and off here; the <RouterLink to="/sites">Sites</RouterLink> page updates too.
+          Status comes from the model, not real radios. Devices with a 5 GHz radio use 5 GHz while it is −72 dBm or better and
+          fall back to 2.4 GHz otherwise. The lines on the map use the same band as this card; the band buttons only change
+          the floor colours. Switch boxes on and off here; the <RouterLink to="/sites">Sites</RouterLink> page updates too.
         </p>
       </section>
       <section class="card">
@@ -548,6 +555,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
 @media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
+.seglabel { font-size: 14px; color: var(--muted); }
 .segs { display: flex; gap: 4px; }
 .seg { background: var(--bg); color: var(--ink); border: 1px solid var(--line); min-height: 36px; padding: 6px 12px; }
 .seg[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }

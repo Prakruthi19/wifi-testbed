@@ -118,6 +118,16 @@ test('sites portal: switching a mesh point off on a home updates the overview', 
   await expect(page.getByRole('list', { name: /Recent changes/ })).toContainText('mesh-1 is offline')
 })
 
+test('floor plan lines agree with the Health card whatever floor band is shown', async ({ page }) => {
+  await page.goto('/#/sites/harbor-4b')
+  await expect(page.locator('.issues')).toContainText('laptop has a weak signal')
+  for (const band of ['2.4 GHz', '5 GHz']) {
+    await page.getByRole('button', { name: band, exact: true }).click()
+    await expect(page.locator('g.device[aria-label^="laptop:"]')).toHaveAttribute('aria-label', /laptop: -\d+ dBm on 5 GHz via router/)
+    await expect(page.locator('line.link.weak')).toHaveCount(3)
+  }
+})
+
 test('run detail explains each test in plain words', async ({ page }) => {
   await page.goto('/#/runs/20260928T030500Z')
   const card = page.locator('article', { hasText: 'Wrong Wi-Fi password (WPA2)' })
