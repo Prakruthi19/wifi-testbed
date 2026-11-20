@@ -2,6 +2,7 @@
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatTime, testName, type Outcome, type RunDetail } from '../api'
+import { describe, SUITES, stepLabel } from '../describe'
 
 // Tests down the side, runs across the top (oldest left), one cell per result.
 // A test that flips between pass and fail across runs shows up as a striped row.
@@ -17,7 +18,8 @@ const rows = computed(() => {
       const cells = cols.value.map((r) => r.results.find((t) => t.nodeid === id) ?? null)
       const seen = cells.filter(Boolean).map((c) => c!.outcome)
       const flips = seen.slice(1).filter((o, i) => (o === 'passed') !== (seen[i] === 'passed')).length
-      return { id, name: testName(id), suite: cells.find(Boolean)!.suite, cells, flips }
+      const suite = cells.find(Boolean)!.suite
+      return { id, name: describe(id).title, code: testName(id), suite: SUITES[suite] ?? suite, cells, flips }
     })
     .sort((a, b) => b.flips - a.flips || a.suite.localeCompare(b.suite) || a.name.localeCompare(b.name))
 })
@@ -28,7 +30,7 @@ const tip = computed(() => {
   const row = rows.value[hover.value.row]
   const run = cols.value[hover.value.col]
   const cell = row.cells[hover.value.col]
-  return { name: row.name, when: formatTime(run.finished), outcome: (cell?.outcome ?? 'not run') as Outcome | 'not run', msg: cell?.message ?? '', stage: cell?.classifier_stage }
+  return { name: row.name, when: formatTime(run.finished), outcome: (cell?.outcome ?? 'not run') as Outcome | 'not run', msg: cell?.message ?? '', stage: cell?.classifier_stage ? stepLabel(cell.classifier_stage) : null }
 })
 
 const open = (col: number) => router.push({ name: 'run', params: { id: cols.value[col].id } })
@@ -52,10 +54,10 @@ const open = (col: number) => router.push({ name: 'run', params: { id: cols.valu
           </span>
         </div>
         <div v-for="(row, ri) in rows" :key="row.id" class="row" role="row">
-          <span role="rowheader" class="name">
+          <span role="rowheader" class="name" :title="row.code">
             {{ row.name }}
             <span class="muted">{{ row.suite }}</span>
-            <span v-if="row.flips" class="flip">flipped {{ row.flips }}×</span>
+            <span v-if="row.flips" class="flip" title="Passed in some runs and failed in others">changed result {{ row.flips }}×</span>
           </span>
           <span v-for="(cell, ci) in row.cells" :key="ci" role="gridcell">
             <button
@@ -77,7 +79,7 @@ const open = (col: number) => router.push({ name: 'run', params: { id: cols.valu
     <p class="tip" aria-live="polite">
       <template v-if="tip">
         <b>{{ tip.name }}</b> · run of {{ tip.when }} · <b>{{ tip.outcome }}</b>
-        <template v-if="tip.stage"> · stopped at {{ tip.stage }}</template>
+        <template v-if="tip.stage"> · stopped at: {{ tip.stage }}</template>
         <span v-if="tip.msg" class="msg"> · {{ tip.msg }}</span>
       </template>
       <template v-else>Hover or tab to a square for the result; click it to open that run. Runs are numbered oldest first.</template>

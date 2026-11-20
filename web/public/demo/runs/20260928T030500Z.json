@@ -77,7 +77,7 @@
    "classifier_stage": "dhcp"
   },
   {
-   "nodeid": "tests/test_enterprise.py::test_eap_login[peap_wrong_password]",
+   "nodeid": "tests/test_enterprise.py::test_enterprise_join[peap_wrong_password]",
    "suite": "enterprise",
    "outcome": "passed",
    "duration_s": 4.2,
@@ -85,7 +85,7 @@
    "properties": {
     "stage": "eap"
    },
-   "artifact_dir": "test_eap_login_peap_wrong_password_",
+   "artifact_dir": "test_enterprise_join_peap_wrong_password_",
    "files": [
     "capture.pcap",
     "classification.json",
