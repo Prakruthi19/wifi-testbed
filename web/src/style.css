@@ -4,6 +4,8 @@
   --pass: #1f7a3f; --pass-bg: #e3f4e8; --fail: #b3261e; --fail-bg: #fbe4e2;
   --skip: #7a6a1f; --skip-bg: #f6efd6; --todo: #c9ccd3;
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #6250d6;
+  --floor-wood: #f1e6d3; --floor-wood-line: #e3d3b8; --floor-tile: #eceff2; --floor-tile-line: #dde1e6;
+  --floor-carpet: #eee9f2; --furniture: #ddd6cb; --furniture-edge: #a99f90; --window: #8fc1ea;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -13,6 +15,8 @@
     --pass: #7fd49a; --pass-bg: #1c3324; --fail: #ff8f86; --fail-bg: #3a1f1d;
     --skip: #e0cc7a; --skip-bg: #332d17; --todo: #4a4e57;
     --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
+    --floor-wood: #2a251f; --floor-wood-line: #352f27; --floor-tile: #23272b; --floor-tile-line: #2d3237;
+    --floor-carpet: #28242d; --furniture: #3b3731; --furniture-edge: #5f584e; --window: #4f86b3;
   }
 }
 * { box-sizing: border-box; }

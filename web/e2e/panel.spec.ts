@@ -82,6 +82,18 @@ test('coverage planner: keyboard can move the router', async ({ page }) => {
   await expect(router).not.toHaveAttribute('transform', before!)
 })
 
+test('coverage planner: walking the phone on 5 GHz roams to a mesh point', async ({ page }) => {
+  await page.goto('/#/coverage')
+  await page.getByRole('button', { name: '5 GHz' }).click()
+  await page.getByRole('button', { name: '10×' }).click()
+  await page.getByRole('button', { name: /Walk the phone/ }).click()
+  const log = page.getByRole('list', { name: /What happened on the walk/ })
+  await expect(log).toContainText('joined router')
+  await expect(log).toContainText(/moved from router \(-\d+ dBm\) to mesh-/, { timeout: 15_000 })
+  await expect(log).toContainText('walk finished', { timeout: 15_000 })
+  await expect(page.getByRole('button', { name: /Walk again/ })).toBeVisible()
+})
+
 test('run detail explains each test in plain words', async ({ page }) => {
   await page.goto('/#/runs/20260928T030500Z')
   const card = page.locator('article', { hasText: 'Wrong Wi-Fi password (WPA2)' })
