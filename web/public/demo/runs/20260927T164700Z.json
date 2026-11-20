@@ -1,0 +1,78 @@
+{
+ "id": "20260927T164700Z",
+ "finished": "2026-09-27T16:47:00+00:00",
+ "counts": {
+  "passed": 2,
+  "failed": 1,
+  "error": 1,
+  "skipped": 0
+ },
+ "results": [
+  {
+   "nodeid": "tests/test_failures.py::test_induced_failure[baseline_success]",
+   "suite": "failures",
+   "outcome": "passed",
+   "duration_s": 4.2,
+   "message": "",
+   "properties": {
+    "stage": "success"
+   },
+   "artifact_dir": "test_induced_failure_baseline_success_",
+   "files": [
+    "capture.pcap",
+    "classification.json",
+    "hostapd.log"
+   ],
+   "classifier_stage": "success"
+  },
+  {
+   "nodeid": "tests/test_failures.py::test_induced_failure[wrong_passphrase_wpa2]",
+   "suite": "failures",
+   "outcome": "passed",
+   "duration_s": 4.2,
+   "message": "",
+   "properties": {
+    "stage": "key_exchange"
+   },
+   "artifact_dir": "test_induced_failure_wrong_passphrase_wpa2_",
+   "files": [
+    "capture.pcap",
+    "classification.json",
+    "hostapd.log"
+   ],
+   "classifier_stage": "key_exchange"
+  },
+  {
+   "nodeid": "tests/test_failures.py::test_induced_failure[mac_blocked]",
+   "suite": "failures",
+   "outcome": "failed",
+   "duration_s": 4.2,
+   "message": "assert 'network_selection' in ('authentication',)",
+   "properties": {
+    "stage": "network_selection"
+   },
+   "artifact_dir": "test_induced_failure_mac_blocked_",
+   "files": [
+    "capture.pcap",
+    "classification.json",
+    "hostapd.log"
+   ],
+   "classifier_stage": "network_selection"
+  },
+  {
+   "nodeid": "tests/test_failures.py::test_induced_failure[dhcp_server_down]",
+   "suite": "failures",
+   "outcome": "error",
+   "duration_s": 4.2,
+   "message": "subprocess.TimeoutExpired: dhclient timed out",
+   "properties": {},
+   "artifact_dir": "test_induced_failure_dhcp_server_down_",
+   "files": [
+    "capture.pcap",
+    "classification.json",
+    "hostapd.log"
+   ],
+   "classifier_stage": "dhcp"
+  }
+ ]
+}
