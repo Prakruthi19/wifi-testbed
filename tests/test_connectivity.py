@@ -108,13 +108,19 @@ def test_qualify_ap(ap_entry, step, hostap, dnsmasq, clients, inventory, artifac
 
     profile = CLIENT_PROFILES["wpa2-only" if step == "wpa2_join" else "wpa3-capable"]
     client = clients[PROFILE_CLIENT[profile.name]]
-    if step == "wpa2_join" and (ap.security == "wpa3" or ap.pmf == 2):
-        pytest.skip("AP does not admit WPA2-only clients by design")
+    # A WPA3-only or PMF-required AP must turn a WPA2-only client away. That refusal is checked,
+    # not skipped: an AP that let the old client in would be a security bug.
+    refuse_wpa2 = step == "wpa2_join" and (ap.security == "wpa3" or ap.pmf == 2)
     res = client.join(ap.ssid, profile.network_for(ap), gateway=lab["gateway"],
                       dns_name=lab["dns_test_name"], dns_expect=lab["gateway"],
                       artifacts=artifacts)
     try:
-        if step in ("wpa3_join", "wpa2_join"):
+        if refuse_wpa2:
+            # Same signature as the wpa2_client_wpa3_ap failure case: the client reads the AP's
+            # rules (RSN element) while scanning and never tries to join.
+            assert res.failed_stage == "network_selection", (
+                f"a WPA2-only client should be refused at network_selection, got {res}")
+        elif step in ("wpa3_join", "wpa2_join"):
             assert res.failed_stage not in (
                 "network_selection", "authentication", "association", "key_exchange"), res
         elif step == "dhcp_lease":

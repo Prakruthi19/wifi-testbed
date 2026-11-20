@@ -141,7 +141,13 @@ def test_parse_iperf_udp_json():
     text = json.dumps({"end": {"sum": {"bits_per_second": 19_800_000, "jitter_ms": 0.0421,
                                        "lost_percent": 0.35}}})
     r = parse_iperf_udp_json(text, "uplink", 20)
-    assert (r.mbps, r.jitter_ms, r.lost_percent, r.error) == (19.8, 0.042, 0.35, None)
+    assert (r.sent_mbps, r.mbps, r.jitter_ms, r.lost_percent, r.error) == \
+        (19.8, 19.73, 0.042, 0.35, None)
+    both = json.dumps({"end": {"sum": {"bits_per_second": 20e6, "jitter_ms": 1, "lost_percent": 50},
+                               "sum_sent": {"bits_per_second": 20e6},
+                               "sum_received": {"bits_per_second": 9e6}}})
+    r = parse_iperf_udp_json(both, "uplink", 20)
+    assert (r.sent_mbps, r.mbps) == (20.0, 9.0)
     assert parse_iperf_udp_json('{"error": "boom"}', "uplink", 20).lost_percent == 100.0
 
 
@@ -202,3 +208,30 @@ def test_consistency():
 
     runs = [{"a": "passed", "b": "passed"}, {"a": "passed", "b": "failed"}, {"a": "passed"}]
     assert consistency(runs) == {"b": ["passed", "failed", "missing"]}
+
+
+def _hanging(tool):
+    """A fake WifiClient.sh where `tool` never answers (raises TimeoutExpired) and the rest succeed."""
+    def fake_sh(*cmd, **kw):
+        if cmd[0] == tool:
+            raise subprocess.TimeoutExpired(cmd, kw.get("timeout"))
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+    return fake_sh
+
+
+def test_wpa_cli_timeout_is_no_answer(tmp_path, monkeypatch):
+    """wpa_supplicant not answering its control socket (first -m qualify/faults run, 2026-09-29)
+    must read as 'no answer', not crash the test."""
+    client = WifiClient("client1", "sta1", "ns-client1", tmp_path, "US")
+    monkeypatch.setattr(client, "sh", _hanging("wpa_cli"))
+    assert client.wpa_cli("status") == ""
+    assert client.wpa_status() == {}
+    assert client.signal_poll() == {}
+
+
+def test_dig_timeout_fails_the_dns_step(tmp_path, monkeypatch):
+    """dig hanging (first -m vlan run, 2026-09-29) is a failed DNS step, not a crash."""
+    client = WifiClient("client1", "sta1", "ns-client1", tmp_path, "US")
+    monkeypatch.setattr(client, "sh", _hanging("dig"))
+    answers, elapsed = client.resolve("192.168.50.1", "gw.lab")
+    assert answers == [] and elapsed >= 0
