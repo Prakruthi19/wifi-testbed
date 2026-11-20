@@ -37,7 +37,7 @@ test('demo cannot start runs', async ({ page }) => {
 })
 
 test('no sideways scrolling on any page', async ({ page }) => {
-  for (const path of ['/', '/#/runs', '/#/coverage', '/#/start']) {
+  for (const path of ['/', '/#/runs', '/#/sites', '/#/sites/oak-7', '/#/coverage', '/#/start']) {
     await page.goto(path)
     await page.waitForLoadState('networkidle')
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
@@ -92,6 +92,30 @@ test('coverage planner: walking the phone on 5 GHz roams to a mesh point', async
   await expect(log).toContainText(/moved from router \(-\d+ dBm\) to mesh-/, { timeout: 15_000 })
   await expect(log).toContainText('walk finished', { timeout: 15_000 })
   await expect(page.getByRole('button', { name: /Walk again/ })).toBeVisible()
+})
+
+test('sites portal: lists every home, worst first, and says which are simulated', async ({ page }) => {
+  await page.goto('/#/sites')
+  await expect(page.getByText(/Only "Lab home" comes from the test bed/)).toBeVisible()
+  const cards = page.getByRole('list', { name: 'Sites' }).getByRole('listitem')
+  await expect(cards).toHaveCount(8)
+  await expect(cards.first()).toContainText('Offline')
+  await expect(cards.filter({ hasText: 'Lab home' })).toContainText('Healthy')
+  await page.getByRole('button', { name: 'Offline', exact: true }).click()
+  await expect(cards).toHaveCount(1)
+  await expect(cards.first()).toContainText('31 Riverside Drive')
+})
+
+test('sites portal: switching a mesh point off on a home updates the overview', async ({ page }) => {
+  await page.goto('/#/sites')
+  await page.getByRole('link', { name: /12 Maple Street/ }).first().click()
+  await expect(page.getByRole('heading', { name: '12 Maple Street' })).toBeVisible()
+  await page.getByRole('checkbox', { name: /mesh-1/ }).uncheck()
+  await expect(page.locator('.issues')).toContainText('mesh-1 is offline')
+  await page.getByRole('link', { name: /All sites/ }).click()
+  const maple = page.getByRole('list', { name: 'Sites' }).getByRole('listitem').filter({ hasText: '12 Maple Street' })
+  await expect(maple).toContainText('Degraded')
+  await expect(page.getByRole('list', { name: /Recent changes/ })).toContainText('mesh-1 is offline')
 })
 
 test('run detail explains each test in plain words', async ({ page }) => {

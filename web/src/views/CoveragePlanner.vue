@@ -1,7 +1,12 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { api, type Lab } from '../api'
 import WalkChart, { type WalkSample } from '../components/WalkChart.vue'
+import StatusBadge from '../components/StatusBadge.vue'
+import { useSites } from '../stores/sites'
+import {
+  BAND_MODEL, FLOORS, H, LEVELS, PX_PER_M, W, WALLS, best as bestAt, levelOf, rssi as rssiAt, roomAt, wallsBetween,
+  type Band, type Node,
+} from '../rfmodel'
 
 // A what-if tool: a furnished house where you place the router and mesh points, see the signal each
 // device would get, and walk a phone through the rooms to watch it roam. Signal comes from a textbook
@@ -10,44 +15,8 @@ import WalkChart, { type WalkSample } from '../components/WalkChart.vue'
 //
 //   received (dBm) = transmit power - loss at 1 m - 10 * n * log10(distance in m) - walls crossed * loss per wall
 
-const W = 720 // drawing units; 40 per metre, so the house is 18 m x 12 m
-const H = 480
-const PX_PER_M = 40
 const CELL = 6 // heatmap resolution in drawing units
 
-const BAND_MODEL = {
-  '2.4': { label: '2.4 GHz', txDbm: 20, loss1m: 40, n: 3.0, wallDb: 5 },
-  '5': { label: '5 GHz', txDbm: 20, loss1m: 47, n: 3.5, wallDb: 9 },
-} as const
-type Band = keyof typeof BAND_MODEL
-
-// Signal levels people use when planning Wi-Fi, strongest first.
-const LEVELS = [
-  { min: -50, label: 'Excellent (≥ −50 dBm)', color: [16, 66, 129] },
-  { min: -60, label: 'Very good (−50 to −60)', color: [42, 120, 214] },
-  { min: -67, label: 'Good: video calls OK (−60 to −67)', color: [109, 167, 236] },
-  { min: -75, label: 'Weak: browsing only (−67 to −75)', color: [183, 211, 246] },
-  { min: -Infinity, label: 'Unusable (below −75)', color: null },
-] as const
-const levelOf = (dbm: number) => LEVELS.findIndex((l) => dbm >= l.min)
-
-// Walls in drawing units. Gaps between segments are doorways, which the signal passes without a wall loss.
-const WALLS: [number, number, number, number][] = [
-  [20, 20, 700, 20], [700, 20, 700, 460], [700, 460, 390, 460], [330, 460, 20, 460], [20, 460, 20, 20], // outside, front door 330-390
-  [260, 20, 260, 200], [260, 260, 260, 460], // living | kitchen and hall
-  [460, 20, 460, 140], [460, 200, 460, 300], [460, 360, 460, 460], // kitchen and hall | bedrooms
-  [460, 240, 700, 240], // bedroom | bedroom
-  [20, 300, 200, 300], // living | office
-]
-// Floor areas: x, y, w, h and the floor finish.
-const FLOORS = [
-  { name: 'Living room', x: 20, y: 20, w: 240, h: 280, floor: 'wood', lx: 34, ly: 42 },
-  { name: 'Office', x: 20, y: 300, w: 240, h: 160, floor: 'wood', lx: 34, ly: 322 },
-  { name: 'Kitchen', x: 260, y: 20, w: 200, h: 220, floor: 'tile', lx: 274, ly: 76 },
-  { name: 'Hall', x: 260, y: 240, w: 200, h: 220, floor: 'wood', lx: 274, ly: 262 },
-  { name: 'Bedroom 1', x: 460, y: 20, w: 240, h: 220, floor: 'carpet', lx: 474, ly: 42 },
-  { name: 'Bedroom 2', x: 460, y: 240, w: 240, h: 220, floor: 'carpet', lx: 474, ly: 262 },
-]
 // Windows on the outside walls (x1, y1, x2, y2).
 const WINDOWS: [number, number, number, number][] = [
   [20, 100, 20, 200], [90, 20, 200, 20], [520, 20, 640, 20], [700, 290, 700, 410], [480, 460, 560, 460], [100, 460, 20, 460],
@@ -67,80 +36,29 @@ function sweep(d: { hinge: number[]; leaf: number[]; shut: number[] }) {
 }
 
 const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)']
-// The router sits on the office desk, where the internet line comes in; one mesh point in the living room, one by the bedrooms.
-const START_APS = [{ x: 70, y: 420 }, { x: 225, y: 70 }, { x: 625, y: 268 }]
-const START_DEVICES: Record<string, { x: number; y: number }> = {
-  phone: { x: 110, y: 170 }, laptop: { x: 125, y: 422 }, camera: { x: 420, y: 405 }, plug: { x: 365, y: 140 }, speaker: { x: 190, y: 255 },
-}
-const SPARE_SPOTS = [{ x: 150, y: 250 }, { x: 600, y: 200 }, { x: 400, y: 300 }]
-const ICONS = ['phone', 'laptop', 'camera', 'plug', 'speaker']
-const iconOf = (name: string) => ICONS.find((k) => name.toLowerCase().includes(k)) ?? 'generic'
-
-interface Node { name: string; x: number; y: number; on: boolean; detail: string; bands?: string[]; icon: string }
-
 const band = ref<Band>('2.4')
 const showHeat = ref(true)
-const aps = reactive<Node[]>([])
-const devices = reactive<Node[]>([])
+const props = defineProps<{ id?: string }>()
+const store = useSites()
+onMounted(store.load)
+const siteId = computed(() => props.id ?? 'lab')
+const site = computed(() => store.byId(siteId.value))
+const health = computed(() => store.health[siteId.value] ?? null)
+const aps = computed(() => site.value?.aps ?? [])
+const devices = computed(() => site.value?.devices ?? [])
 const cursor = ref<{ x: number; y: number } | null>(null)
 const svg = ref<SVGSVGElement | null>(null)
 const canvas = ref<HTMLCanvasElement | null>(null)
 const dragging = ref<{ list: Node[]; i: number } | null>(null)
 
-function reset(lab: Lab | null) {
+function reset() {
   stopWalk(true)
-  const home = lab?.home
-  const apList = home?.access_points ?? [{ name: 'router', channel: 6 }, { name: 'mesh-living', channel: 1 }, { name: 'mesh-bedroom', channel: 11 }]
-  const devList = home?.devices ?? []
-  aps.splice(0, aps.length, ...apList.slice(0, 3).map((a, i) => ({ name: a.name, ...START_APS[i], on: true, detail: `channel ${a.channel}`, icon: 'ap' })))
-  let spare = 0
-  devices.splice(0, devices.length, ...devList.slice(0, 6).map((d) => ({
-    name: d.name,
-    ...(START_DEVICES[iconOf(d.name)] ?? SPARE_SPOTS[spare++ % SPARE_SPOTS.length]),
-    on: true,
-    bands: d.bands,
-    icon: iconOf(d.name),
-    detail: `${d.profile}, radios: ${d.bands.join(' + ')} GHz`,
-  })))
+  store.resetSite(siteId.value)
 }
+watch(siteId, () => stopWalk(true))
 
-let lab: Lab | null = null
-onMounted(async () => {
-  try {
-    lab = await api.lab()
-  } catch {
-    lab = null
-  }
-  reset(lab)
-})
-
-function wallsBetween(x0: number, y0: number, x1: number, y1: number) {
-  let n = 0
-  for (const [a, b, c, d] of WALLS) {
-    const den = (x1 - x0) * (d - b) - (y1 - y0) * (c - a)
-    if (den === 0) continue
-    const t = ((a - x0) * (d - b) - (b - y0) * (c - a)) / den
-    const u = ((a - x0) * (y1 - y0) - (b - y0) * (x1 - x0)) / den
-    if (t > 0 && t < 1 && u >= 0 && u <= 1) n++
-  }
-  return n
-}
-
-function rssi(ap: Node, x: number, y: number) {
-  const m = BAND_MODEL[band.value]
-  const d = Math.max(0.5, Math.hypot(ap.x - x, ap.y - y) / PX_PER_M)
-  return m.txDbm - m.loss1m - 10 * m.n * Math.log10(d) - wallsBetween(ap.x, ap.y, x, y) * m.wallDb
-}
-
-function best(x: number, y: number) {
-  let top: { ap: Node; i: number; dbm: number } | null = null
-  aps.forEach((ap, i) => {
-    if (!ap.on) return
-    const dbm = rssi(ap, x, y)
-    if (!top || dbm > top.dbm) top = { ap, i, dbm }
-  })
-  return top as { ap: Node; i: number; dbm: number } | null
-}
+const rssi = (ap: Node, x: number, y: number) => rssiAt(ap, x, y, band.value)
+const best = (x: number, y: number) => bestAt(aps.value, x, y, band.value)
 
 function paint() {
   const el = canvas.value
@@ -200,7 +118,6 @@ const walk = reactive({
   nextSample: 0,
 })
 
-const roomAt = (x: number, y: number) => FLOORS.find((f) => x >= f.x && x <= f.x + f.w && y >= f.y && y <= f.y + f.h)?.name ?? 'outside'
 function walkerPos(dist: number) {
   let left = dist
   for (let i = 0; i < legs.length; i++) {
@@ -220,7 +137,7 @@ const walker = computed(() => walkerPos(walk.dist))
 
 function sample() {
   const { x, y } = walker.value
-  const name = (i: number) => aps[i].name
+  const name = (i: number) => aps.value[i].name
   const cur = walk.ap
   const top = best(x, y)
   if (!top) {
@@ -228,17 +145,17 @@ function sample() {
     walk.ap = null
     return
   }
-  if (cur === null || !aps[cur].on) {
+  if (cur === null || !aps.value[cur].on) {
     walk.ap = top.i
     walk.log.unshift({ t: walk.t, text: `joined ${top.ap.name} at ${Math.round(top.dbm)} dBm`, kind: 'info' })
   } else {
-    const now = rssi(aps[cur], x, y)
+    const now = rssi(aps.value[cur], x, y)
     if (now < ROAM_BELOW && top.i !== cur && top.dbm >= now + ROAM_MARGIN) {
       walk.log.unshift({ t: walk.t, text: `moved from ${name(cur)} (${Math.round(now)} dBm) to ${top.ap.name} (${Math.round(top.dbm)} dBm)`, kind: 'roam' })
       walk.ap = top.i
     }
   }
-  walk.samples.push({ t: walk.t, dbm: rssi(aps[walk.ap!], x, y), ap: walk.ap! })
+  walk.samples.push({ t: walk.t, dbm: rssi(aps.value[walk.ap!], x, y), ap: walk.ap! })
 }
 
 let raf = 0
@@ -284,14 +201,15 @@ watch(band, () => {
 const walking = computed(() => walk.state !== 'idle')
 const walkNow = computed(() => {
   const s = walk.samples.at(-1)
-  return s ? { ...s, ap: aps[s.ap]?.name, color: SERIES[s.ap] } : null
+  return s ? { ...s, ap: aps.value[s.ap]?.name, color: SERIES[s.ap] } : null
 })
 const roams = computed(() => walk.log.filter((l) => l.kind === 'roam').length)
-const apNames = computed(() => aps.map((a) => a.name))
+const apNames = computed(() => aps.value.map((a) => a.name))
 
 // --- Static devices --------------------------------------------------------------------------------
 const links = computed(() =>
-  devices.map((d) => {
+  devices.value.map((d) => {
+    if (!d.on) return { d, b: null, text: 'offline (not seen)', usable: false, hidden: false }
     const fiveOnly = band.value === '5' && d.bands && !d.bands.includes('5')
     const b = fiveOnly ? null : best(d.x, d.y)
     const usable = b && b.dbm >= -75
@@ -322,7 +240,7 @@ const readout = computed(() => {
   if (!cursor.value) return null
   const { x, y } = cursor.value
   if (x < 20 || x > 700 || y < 20 || y > 460) return null
-  const per = aps.filter((a) => a.on).map((a) => ({ name: a.name, dbm: Math.round(rssi(a, x, y)), walls: wallsBetween(a.x, a.y, x, y) }))
+  const per = aps.value.filter((a) => a.on).map((a) => ({ name: a.name, dbm: Math.round(rssi(a, x, y)), walls: wallsBetween(a.x, a.y, x, y) }))
   return { per: per.sort((a, b) => b.dbm - a.dbm), where: roomAt(x, y) }
 })
 
@@ -355,9 +273,15 @@ function nudge(n: Node, e: KeyboardEvent) {
 </script>
 
 <template>
-  <h1>Coverage planner</h1>
+  <RouterLink v-if="props.id" to="/sites" class="back">← All sites</RouterLink>
+  <div class="titlerow">
+    <h1>{{ props.id && site ? site.name : 'Coverage planner' }}</h1>
+    <StatusBadge v-if="health" :status="health.status" />
+    <span v-if="site?.simulated" class="simtag">Simulated site</span>
+    <span v-if="site" class="muted">{{ site.area }}</span>
+  </div>
   <p class="sub">
-    A furnished floor plan of the lab's home network. Drag the router, mesh points and devices, switch access points
+    A furnished floor plan of {{ site?.simulated ? 'this simulated home' : "the lab's home network" }}. Drag the router, mesh points and devices, switch access points
     off, or walk the phone through the rooms and watch it change access point. <b>This is a model, not a
     measurement:</b> the lab's radios are emulated, so the signal comes from a standard indoor formula (distance loss
     plus {{ BAND_MODEL[band].wallDb }} dB per wall on {{ BAND_MODEL[band].label }}).
@@ -374,7 +298,7 @@ function nudge(n: Node, e: KeyboardEvent) {
           </div>
           <label class="check"><input v-model="showHeat" type="checkbox" /> Signal colours</label>
           <span class="stat"><b>{{ coverage }}%</b> of the house good enough for video calls</span>
-          <button type="button" class="seg" @click="reset(lab)">Reset</button>
+          <button type="button" class="seg" @click="reset">Reset</button>
         </div>
 
         <div class="stage">
@@ -456,7 +380,7 @@ function nudge(n: Node, e: KeyboardEvent) {
               v-show="!links[i]?.hidden"
               :key="d.name"
               class="node device"
-              :class="{ bad: !links[i]?.usable }"
+              :class="{ bad: !links[i]?.usable, off: !d.on }"
               :transform="`translate(${d.x},${d.y})`"
               tabindex="0"
               :aria-label="`${d.name}: ${links[i]?.text}`"
@@ -470,6 +394,8 @@ function nudge(n: Node, e: KeyboardEvent) {
                 <template v-else-if="d.icon === 'camera'"><rect x="-9" y="-6" width="14" height="11" rx="2" /><path d="M5,-2 L10,-5 V4 L5,1" /><circle cx="-2" cy="-0.5" r="2.5" /></template>
                 <template v-else-if="d.icon === 'plug'"><rect x="-6" y="-6" width="12" height="13" rx="3" /><line x1="-2.5" y1="-6" x2="-2.5" y2="-10" /><line x1="2.5" y1="-6" x2="2.5" y2="-10" /></template>
                 <template v-else-if="d.icon === 'speaker'"><rect x="-6" y="-9" width="12" height="18" rx="3" /><circle cy="3" r="3" /><circle cy="-4.5" r="1.2" /></template>
+                <template v-else-if="d.icon === 'tv'"><rect x="-10" y="-8" width="20" height="13" rx="1.5" /><line x1="-5" y1="9" x2="5" y2="9" /><line x1="0" y1="5" x2="0" y2="9" /></template>
+                <template v-else-if="d.icon === 'tablet'"><rect x="-7" y="-9" width="14" height="18" rx="2" /><circle cy="6" r="0.8" /></template>
                 <rect v-else x="-6" y="-6" width="12" height="12" rx="2" />
               </g>
               <text y="28" text-anchor="middle" class="nlabel">{{ d.name }}</text>
@@ -564,6 +490,17 @@ function nudge(n: Node, e: KeyboardEvent) {
     </div>
 
     <aside class="side">
+      <section v-if="health" class="card">
+        <h2>Health</h2>
+        <p v-if="!health.issues.length" class="good">No problems: every access point is on and every device has a good signal.</p>
+        <ul v-else class="issues">
+          <li v-for="i in health.issues" :key="i.key" :class="i.severity">{{ i.text }}</li>
+        </ul>
+        <p class="muted small">
+          Status comes from the model, not real radios. Devices with a 5 GHz radio use 5 GHz while it is decent and fall back
+          to 2.4 GHz otherwise. Switch boxes on and off here; the <RouterLink to="/sites">Sites</RouterLink> page updates too.
+        </p>
+      </section>
       <section class="card">
         <h2>Signal levels</h2>
         <ul class="legend">
@@ -630,6 +567,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .node:active { cursor: grabbing; }
 .node:focus-visible .badge, .node:focus-visible .apdot { stroke: var(--ink); stroke-width: 3; }
 .badge { fill: var(--card); stroke: var(--ink); stroke-width: 1.5; }
+.device.off { opacity: 0.4; }
 .device.bad .badge { stroke: var(--fail); stroke-width: 2; stroke-dasharray: 3 2; }
 .icon * { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .apdot { stroke: var(--card); stroke-width: 2; }
@@ -669,6 +607,13 @@ function nudge(n: Node, e: KeyboardEvent) {
 .log li { padding: 4px 8px; border-radius: 6px; background: var(--bg); }
 .log li.roam { background: var(--skip-bg); }
 .log .ts { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 6px; }
+.back { display: inline-block; margin-bottom: 6px; font-size: 14px; }
+.titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
+.titlerow h1 { margin: 0; }
+.simtag { font-size: 12px; border: 1px dashed var(--muted); color: var(--muted); border-radius: 999px; padding: 1px 8px; }
+.issues { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; font-size: 14px; }
+.issues li { padding: 6px 8px; border-radius: 6px; border-left: 4px solid var(--skip); background: var(--skip-bg); }
+.issues li.problem, .issues li.offline { border-color: var(--fail); background: var(--fail-bg); }
 .legend, .devs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
 .legend i, .toggle i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; vertical-align: -2px; margin-right: 6px; }
 .legend i.empty { border: 1px dashed var(--muted); }

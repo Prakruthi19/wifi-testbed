@@ -14,6 +14,7 @@ onMounted(summary.load)
       <nav aria-label="Main">
         <RouterLink to="/">Lab</RouterLink>
         <RouterLink to="/runs">Test runs</RouterLink>
+        <RouterLink to="/sites">Sites</RouterLink>
         <RouterLink to="/coverage">Coverage</RouterLink>
         <RouterLink to="/start">Start a run</RouterLink>
       </nav>
