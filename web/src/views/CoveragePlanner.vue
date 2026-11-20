@@ -4,7 +4,7 @@ import WalkChart, { type WalkSample } from '../components/WalkChart.vue'
 import StatusBadge from '../components/StatusBadge.vue'
 import { useSites } from '../stores/sites'
 import {
-  BAND_MODEL, FLOORS, H, LEVELS, PX_PER_M, W, WALLS, best as bestAt, levelOf, rssi as rssiAt, roomAt, wallsBetween,
+  BAND_MODEL, FLOORS, GOOD_DBM, H, LEVELS, USABLE_DBM, PX_PER_M, W, WALLS, best as bestAt, levelOf, rssi as rssiAt, roomAt, wallsBetween,
   type Band, type Node,
 } from '../rfmodel'
 
@@ -59,6 +59,8 @@ watch(siteId, () => stopWalk(true))
 
 const rssi = (ap: Node, x: number, y: number) => rssiAt(ap, x, y, band.value)
 const best = (x: number, y: number) => bestAt(aps.value, x, y, band.value)
+// Line style for a link: the same thresholds the Health card uses.
+const tier = (dbm: number) => (dbm >= GOOD_DBM ? 'good' : dbm >= USABLE_DBM ? 'weak' : 'bad')
 
 function paint() {
   const el = canvas.value
@@ -372,7 +374,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 
             <!-- links from each parked device to the AP it would use -->
             <template v-for="l in links" :key="'l' + l.d.name">
-              <line v-if="l.b && !l.hidden" :x1="l.d.x" :y1="l.d.y" :x2="l.b.ap.x" :y2="l.b.ap.y" :stroke="SERIES[l.b.i]" class="link" :class="{ weak: !l.usable }" />
+              <line v-if="l.b && !l.hidden" :x1="l.d.x" :y1="l.d.y" :x2="l.b.ap.x" :y2="l.b.ap.y"  class="link" :class="tier(l.b.dbm)" />
             </template>
 
             <g
@@ -424,7 +426,7 @@ function nudge(n: Node, e: KeyboardEvent) {
             <!-- the walking phone -->
             <g v-if="walking" aria-hidden="true">
               <path :d="routePath" class="route" />
-              <line v-if="walk.ap !== null && aps[walk.ap]" :x1="walker.x" :y1="walker.y" :x2="aps[walk.ap].x" :y2="aps[walk.ap].y" :stroke="SERIES[walk.ap]" class="link live" />
+              <line v-if="walk.ap !== null && aps[walk.ap]" :x1="walker.x" :y1="walker.y" :x2="aps[walk.ap].x" :y2="aps[walk.ap].y"  class="link live" :class="tier(walkNow?.dbm ?? -99)" />
               <g :transform="`translate(${walker.x},${walker.y})`" class="walker">
                 <circle r="16" :fill="walk.ap !== null ? SERIES[walk.ap] : 'var(--muted)'" />
                 <rect x="-5" y="-9" width="10" height="18" rx="2" class="wphone" />
@@ -502,7 +504,15 @@ function nudge(n: Node, e: KeyboardEvent) {
         </p>
       </section>
       <section class="card">
-        <h2>Signal levels</h2>
+        <h2>Lines to access points</h2>
+        <p class="muted small">Each device's line goes to the access point it would use, coloured by how strong that signal is.</p>
+        <ul class="linekey key">
+          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="good" /></svg>Good: −67 dBm or stronger</li>
+          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="weak" /></svg>Weak: −67 to −75 dBm</li>
+          <li><svg viewBox="0 0 40 10" aria-hidden="true"><line x1="2" y1="5" x2="38" y2="5" class="bad" /></svg>Unusable: below −75 dBm</li>
+        </ul>
+        <h2 class="spaced">Signal levels</h2>
+        <p class="muted small">dBm is the received signal power; closer to 0 is stronger, and every 10 dB less is ten times weaker.</p>
         <ul class="legend">
           <li v-for="l in LEVELS" :key="l.label">
             <i :style="{ background: l.color ? `rgb(${l.color.join(',')})` : 'transparent' }" :class="{ empty: !l.color }" />
@@ -559,9 +569,13 @@ function nudge(n: Node, e: KeyboardEvent) {
 .win-gap { stroke: var(--card); stroke-width: 4; }
 .win { stroke: var(--window); stroke-width: 2; }
 .door { fill: none; stroke: var(--muted); stroke-width: 1.2; stroke-dasharray: 3 3; pointer-events: none; }
-.link { stroke-width: 2; stroke-dasharray: 5 4; opacity: 0.9; pointer-events: none; animation: flow 1.2s linear infinite; }
-.link.weak { opacity: 0.4; }
-.link.live { stroke-width: 3; }
+.link { pointer-events: none; animation: flow 1.2s linear infinite; stroke-linecap: round; }
+.link.good, .key .good { stroke: var(--pass); stroke-width: 3; stroke-dasharray: 10 4; }
+.link.weak, .key .weak { stroke: var(--skip); stroke-width: 3; stroke-dasharray: 4 5; }
+.link.bad, .key .bad { stroke: var(--fail); stroke-width: 3; stroke-dasharray: 0.5 6; stroke-linecap: round; }
+.link.live { stroke-width: 4; }
+.linekey { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
+.linekey svg { width: 40px; height: 10px; vertical-align: middle; margin-right: 8px; }
 @keyframes flow { to { stroke-dashoffset: -18; } }
 .node { cursor: grab; outline: none; }
 .node:active { cursor: grabbing; }
@@ -607,6 +621,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .log li { padding: 4px 8px; border-radius: 6px; background: var(--bg); }
 .log li.roam { background: var(--skip-bg); }
 .log .ts { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 6px; }
+.spaced { margin-top: 18px; }
 .back { display: inline-block; margin-bottom: 6px; font-size: 14px; }
 .titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .titlerow h1 { margin: 0; }
