@@ -3,6 +3,7 @@
   --accent: #2257d6; --accent-ink: #fff;
   --pass: #1f7a3f; --pass-bg: #e3f4e8; --fail: #b3261e; --fail-bg: #fbe4e2;
   --skip: #7a6a1f; --skip-bg: #f6efd6; --todo: #c9ccd3;
+  --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #6250d6;
   color-scheme: light dark;
 }
 @media (prefers-color-scheme: dark) {
@@ -11,6 +12,7 @@
     --accent: #7ea3ff; --accent-ink: #0d1430;
     --pass: #7fd49a; --pass-bg: #1c3324; --fail: #ff8f86; --fail-bg: #3a1f1d;
     --skip: #e0cc7a; --skip-bg: #332d17; --todo: #4a4e57;
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #9085e9;
   }
 }
 * { box-sizing: border-box; }
