@@ -7,6 +7,7 @@ test's join steps up to the stage where it failed, and a form that starts a suit
 |---|---|
 | Lab | channel maps (where each AP sits in the 2.4/5 GHz spectrum, overlap warnings), access points, client radios, VLANs, latest pass/fail |
 | Test runs | grid of every test in every run (flaky tests float to the top; click a square to open the run), or a table; filter by suite or runs with failures |
+| Sites | a monitoring portal for many homes: health worked out from the signal model, worst first, open problems, live activity feed, optional live simulation. Only "Lab home" is the test bed; the other homes are simulated |
 | Coverage | drag the router, mesh points and devices around a floor plan; modelled signal heatmap per band, switch an AP off, per-device signal. A textbook path-loss model, not measurements: the lab's radios are emulated |
 | Run detail | each test with its join timeline (from the capture classifier), recorded facts, saved files |
 | Start a run | pick a suite and run it; live log while it runs (live mode only) |
