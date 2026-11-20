@@ -5,8 +5,9 @@ test's join steps up to the stage where it failed, and a form that starts a suit
 
 | Screen | What it shows |
 |---|---|
-| Lab | access points (Wi-Fi name, security, band/channel, PMF), client radios, VLANs, latest pass/fail |
-| Test runs | every pytest session, newest first; filter by suite or runs with failures |
+| Lab | channel maps (where each AP sits in the 2.4/5 GHz spectrum, overlap warnings), access points, client radios, VLANs, latest pass/fail |
+| Test runs | grid of every test in every run (flaky tests float to the top; click a square to open the run), or a table; filter by suite or runs with failures |
+| Coverage | drag the router, mesh points and devices around a floor plan; modelled signal heatmap per band, switch an AP off, per-device signal. A textbook path-loss model, not measurements: the lab's radios are emulated |
 | Run detail | each test with its join timeline (from the capture classifier), recorded facts, saved files |
 | Start a run | pick a suite and run it; live log while it runs (live mode only) |
 

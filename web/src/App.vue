@@ -14,6 +14,7 @@ onMounted(summary.load)
       <nav aria-label="Main">
         <RouterLink to="/">Lab</RouterLink>
         <RouterLink to="/runs">Test runs</RouterLink>
+        <RouterLink to="/coverage">Coverage</RouterLink>
         <RouterLink to="/start">Start a run</RouterLink>
       </nav>
     </div>
@@ -33,7 +34,7 @@ onMounted(summary.load)
 </template>
 
 <style scoped>
-.wrap { max-width: 1100px; margin: 0 auto; padding-left: 16px; padding-right: 16px; }
+.wrap { max-width: 1440px; margin: 0 auto; padding-left: clamp(16px, 3vw, 32px); padding-right: clamp(16px, 3vw, 32px); }
 .top { background: var(--card); border-bottom: 1px solid var(--line); }
 .bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; flex-wrap: wrap; }
 .brand { font-weight: 700; color: var(--ink); text-decoration: none; }

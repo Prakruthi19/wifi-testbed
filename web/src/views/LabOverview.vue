@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { api, formatTime, type Lab } from '../api'
 import { useSummary } from '../stores/summary'
 import CountsBar from '../components/CountsBar.vue'
+import ChannelMap from '../components/ChannelMap.vue'
 
 const summary = useSummary()
 const lab = ref<Lab | null>(null)
@@ -17,6 +18,13 @@ onMounted(async () => {
 })
 
 const securityLabel: Record<string, string> = { wpa2: 'WPA2-Personal', wpa3: 'WPA3-Personal (SAE)', transition: 'WPA2/WPA3 mixed' }
+const qualifyAps = computed(() =>
+  (lab.value?.aps ?? []).map((a) => ({ name: a.name, channel: a.channel, ssid: a.ssid, security: securityLabel[a.security] ?? a.security })),
+)
+const homeAps = computed(() =>
+  (lab.value?.home?.access_points ?? []).map((a) => ({ name: a.name, channel: a.channel, ssid: lab.value?.home?.ssid })),
+)
+
 const band = (channel: number) => (channel > 14 ? '5 GHz' : '2.4 GHz')
 </script>
 
@@ -36,6 +44,19 @@ const band = (channel: number) => (channel > 14 ? '5 GHz' : '2.4 GHz')
     <h2>Latest result of every test</h2>
     <CountsBar :counts="summary.data.counts" />
     <p class="muted">Last run finished {{ formatTime(summary.data.last_finished) }}. <RouterLink to="/runs">See all runs</RouterLink></p>
+  </div>
+
+  <div class="maps">
+    <section v-if="homeAps.length" class="card">
+      <h2>Home mesh: channel map</h2>
+      <p class="muted">Router and two mesh points with one Wi-Fi name. <RouterLink to="/coverage">Plan their placement →</RouterLink></p>
+      <ChannelMap :aps="homeAps" />
+    </section>
+    <section v-if="qualifyAps.length" class="card">
+      <h2>Qualification APs: channel map</h2>
+      <p class="muted">Every AP in the inventory must pass the baseline suite before the full matrix runs.</p>
+      <ChannelMap :aps="qualifyAps" />
+    </section>
   </div>
 
   <section v-if="lab?.aps?.length" class="card">
@@ -69,3 +90,8 @@ const band = (channel: number) => (channel > 14 ? '5 GHz' : '2.4 GHz')
     </section>
   </div>
 </template>
+
+<style scoped>
+.maps { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); margin-bottom: 16px; }
+.maps .card { margin-bottom: 0; }
+</style>

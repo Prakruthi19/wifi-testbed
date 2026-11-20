@@ -22,8 +22,15 @@ export interface AccessPoint {
   channel: number
 }
 
+export interface HomeNetwork {
+  ssid: string
+  access_points: { name: string; iface: string; channel: number }[]
+  devices: { name: string; iface: string; profile: string; bands: string[] }[]
+}
+
 export interface Lab {
   aps?: AccessPoint[]
+  home?: HomeNetwork
   client_radios?: { name: string; iface: string; namespace: string }[]
   vlans?: { ssid: string; vlan: number; subnet: string }[]
   [key: string]: unknown
