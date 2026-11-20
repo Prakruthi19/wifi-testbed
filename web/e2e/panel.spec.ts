@@ -16,10 +16,10 @@ test('runs list opens a run with failures first and a join timeline', async ({ p
   await page.goto('/#/runs')
   await page.getByRole('button', { name: 'Table' }).click()
   await page.getByRole('link').filter({ hasText: /2026/ }).last().click()
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Run of')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Test run of')
   const first = page.locator('article').first()
-  await expect(first.locator('.badge')).toHaveText(/failed|error/)
-  await expect(page.getByText('failed here').first()).toBeAttached()
+  await expect(first.locator('.verdict')).toContainText(/failed|crashed/)
+  await expect(page.getByText('stopped here').first()).toBeAttached()
 })
 
 test('filter shows only runs with failures', async ({ page }) => {
@@ -55,11 +55,11 @@ test('channel map flags no overlap for the home mesh on 1, 6 and 11', async ({ p
 
 test('results grid: a square opens its run', async ({ page }) => {
   await page.goto('/#/runs')
-  const cell = page.getByRole('button', { name: /mac_blocked\], run 1: failed/ })
+  const cell = page.getByRole('button', { name: /Device blocked by the router, run 1: failed/ })
   await cell.focus()
   await expect(page.locator('.tip')).toContainText('failed')
   await cell.click()
-  await expect(page.getByRole('heading', { level: 1 })).toContainText('Run of')
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Test run of')
 })
 
 test('coverage planner: on 5 GHz the router alone covers less than with both mesh points', async ({ page }) => {
@@ -80,4 +80,15 @@ test('coverage planner: keyboard can move the router', async ({ page }) => {
   await router.focus()
   await page.keyboard.press('ArrowRight')
   await expect(router).not.toHaveAttribute('transform', before!)
+})
+
+test('run detail explains each test in plain words', async ({ page }) => {
+  await page.goto('/#/runs/20260928T030500Z')
+  const card = page.locator('article', { hasText: 'Wrong Wi-Fi password (WPA2)' })
+  await expect(card.getByText('What it does:')).toBeVisible()
+  await expect(card.locator('.verdict')).toContainText('failed on purpose')
+  await expect(card.getByText('That is exactly where this broken setup should stop.')).toBeVisible()
+  const roam = page.locator('article', { hasText: 'Fast roaming (802.11r)' })
+  await expect(roam.getByText('Time to switch access point')).toBeVisible()
+  await expect(roam.getByText('56.7 ms')).toBeVisible()
 })
