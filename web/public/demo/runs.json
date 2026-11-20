@@ -1,0 +1,30 @@
+[
+ {
+  "id": "20260928T030500Z",
+  "finished": "2026-09-28T03:05:00+00:00",
+  "counts": {
+   "passed": 7,
+   "failed": 0,
+   "error": 0,
+   "skipped": 0
+  },
+  "suites": [
+   "enterprise",
+   "failures",
+   "roam"
+  ]
+ },
+ {
+  "id": "20260927T164700Z",
+  "finished": "2026-09-27T16:47:00+00:00",
+  "counts": {
+   "passed": 2,
+   "failed": 1,
+   "error": 1,
+   "skipped": 0
+  },
+  "suites": [
+   "failures"
+  ]
+ }
+]

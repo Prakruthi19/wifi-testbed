@@ -26,6 +26,7 @@ WPA2/WPA3, PMF, bands and channels, and it names the stage where a join failed b
 | Home network | main router + 2 mesh points (one Wi-Fi name, bridged) and 5 device types (phone, laptop, camera, plug, speaker): everyone joins at once, mesh walk, mesh point switched off, interop (device x WPA2/WPA3/mixed/5 GHz, expected results written first, capture cross-check), busy house (download + camera stream + ping delay), 7 troubleshooting cases that break one thing, check the plain-words diagnosis, fix it and rejoin | `-m home` (needs `HOMENET=1` setup) |
 | WPA3 decryption | WPA3-SAE capture decrypted with the session PMK from the client log (`wpa_supplicant -K`), so the classifier sees DHCP/DNS; the passphrase alone must not work | `-m decrypt` |
 | Range vs rate (designed only) | attenuator sweep recording RSSI, link rate, throughput; needs real radios + attenuator | `-m rf --attenuator http://<ip>` |
+| Web control panel | Vue 3 + TypeScript front end over a FastAPI API: lab overview, test runs, join timeline per test, start a suite; read-only demo on GitHub Pages; Playwright tests at desktop and phone sizes. See [web/README.md](web/README.md) | `cd web && npm run dev` |
 
 Designed, not run (no hardware yet): `testbed/openwrt.py` (configure a real OpenWrt AP from the
 same `ApConfig`), `testbed/attenuator.py` + `tests/test_rvr.py`, `lab/monitor_capture.sh`

@@ -1,0 +1,167 @@
+{
+ "lab": {
+  "country_code": "US",
+  "hwsim_radios": 4,
+  "capture_iface": "hwsim0",
+  "gateway": "192.168.50.1",
+  "subnet": "192.168.50.0/24",
+  "dhcp_range": [
+   "192.168.50.100",
+   "192.168.50.199"
+  ],
+  "dns_domain": "lab",
+  "dns_test_name": "gw.lab"
+ },
+ "ap_radio": {
+  "iface": "ap0"
+ },
+ "client_radios": [
+  {
+   "name": "client1",
+   "iface": "sta1",
+   "namespace": "ns-client1"
+  },
+  {
+   "name": "client2",
+   "iface": "sta2",
+   "namespace": "ns-client2"
+  },
+  {
+   "name": "client3",
+   "iface": "sta3",
+   "namespace": "ns-client3"
+  }
+ ],
+ "aps": [
+  {
+   "name": "ap-wpa2-2g",
+   "ssid": "lab-wpa2",
+   "security": "wpa2",
+   "pmf": 1,
+   "channel": 6
+  },
+  {
+   "name": "ap-wpa3-5g",
+   "ssid": "lab-wpa3",
+   "security": "wpa3",
+   "pmf": 2,
+   "channel": 36
+  },
+  {
+   "name": "ap-transition-2g",
+   "ssid": "lab-trans",
+   "security": "transition",
+   "pmf": 1,
+   "channel": 11
+  }
+ ],
+ "vlans": [
+  {
+   "ssid": "lab-mgmt",
+   "vlan": 10,
+   "subnet": "10.10.10.0/24",
+   "gateway": "10.10.10.1",
+   "dhcp_range": [
+    "10.10.10.100",
+    "10.10.10.199"
+   ]
+  },
+  {
+   "ssid": "lab-test",
+   "vlan": 20,
+   "subnet": "10.10.20.0/24",
+   "gateway": "10.10.20.1",
+   "dhcp_range": [
+    "10.10.20.100",
+    "10.10.20.199"
+   ]
+  },
+  {
+   "ssid": "lab-iot",
+   "vlan": 30,
+   "subnet": "10.10.30.0/24",
+   "gateway": "10.10.30.1",
+   "dhcp_range": [
+    "10.10.30.100",
+    "10.10.30.199"
+   ],
+   "isolatable": true
+  }
+ ],
+ "home": {
+  "ssid": "lab-home",
+  "access_points": [
+   {
+    "name": "router",
+    "iface": "ap0",
+    "channel": 6
+   },
+   {
+    "name": "mesh-living",
+    "iface": "ap1",
+    "channel": 1
+   },
+   {
+    "name": "mesh-bedroom",
+    "iface": "ap2",
+    "channel": 11
+   }
+  ],
+  "devices": [
+   {
+    "name": "phone",
+    "iface": "sta1",
+    "namespace": "ns-client1",
+    "profile": "wpa3-capable",
+    "bands": [
+     "2.4",
+     "5"
+    ]
+   },
+   {
+    "name": "laptop",
+    "iface": "sta2",
+    "namespace": "ns-client2",
+    "profile": "wpa3-capable",
+    "bands": [
+     "2.4",
+     "5"
+    ]
+   },
+   {
+    "name": "camera",
+    "iface": "sta3",
+    "namespace": "ns-client3",
+    "profile": "wpa2-only",
+    "bands": [
+     "2.4"
+    ]
+   },
+   {
+    "name": "plug",
+    "iface": "sta4",
+    "namespace": "ns-client4",
+    "profile": "wpa2-only",
+    "bands": [
+     "2.4"
+    ]
+   },
+   {
+    "name": "speaker",
+    "iface": "sta5",
+    "namespace": "ns-client5",
+    "profile": "wpa3-capable",
+    "bands": [
+     "2.4"
+    ]
+   }
+  ]
+ },
+ "software": {
+  "kernel": "",
+  "hostapd": "",
+  "wpa_supplicant": "",
+  "dnsmasq": "",
+  "tshark": ""
+ }
+}

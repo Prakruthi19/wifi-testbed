@@ -1,0 +1,146 @@
+[
+ {
+  "nodeid": "tests/test_enterprise.py::test_eap_login[peap_wrong_password]",
+  "suite": "enterprise",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "stage": "eap"
+  },
+  "history": [
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_eap_login_peap_wrong_password_",
+  "files": [
+   "capture.pcap",
+   "classification.json",
+   "hostapd.log"
+  ],
+  "classifier_stage": "eap"
+ },
+ {
+  "nodeid": "tests/test_failures.py::test_induced_failure[baseline_success]",
+  "suite": "failures",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "stage": "success"
+  },
+  "history": [
+   "passed",
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_induced_failure_baseline_success_",
+  "files": [
+   "capture.pcap",
+   "classification.json",
+   "hostapd.log"
+  ],
+  "classifier_stage": "success"
+ },
+ {
+  "nodeid": "tests/test_failures.py::test_induced_failure[dhcp_server_down]",
+  "suite": "failures",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "stage": "dhcp"
+  },
+  "history": [
+   "error",
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_induced_failure_dhcp_server_down_",
+  "files": [
+   "capture.pcap",
+   "classification.json",
+   "hostapd.log"
+  ],
+  "classifier_stage": "dhcp"
+ },
+ {
+  "nodeid": "tests/test_failures.py::test_induced_failure[mac_blocked]",
+  "suite": "failures",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "stage": "network_selection"
+  },
+  "history": [
+   "failed",
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_induced_failure_mac_blocked_",
+  "files": [
+   "capture.pcap",
+   "classification.json",
+   "hostapd.log"
+  ],
+  "classifier_stage": "network_selection"
+ },
+ {
+  "nodeid": "tests/test_failures.py::test_induced_failure[wrong_passphrase_wpa2]",
+  "suite": "failures",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "stage": "key_exchange"
+  },
+  "history": [
+   "passed",
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_induced_failure_wrong_passphrase_wpa2_",
+  "files": [
+   "capture.pcap",
+   "classification.json",
+   "hostapd.log"
+  ],
+  "classifier_stage": "key_exchange"
+ },
+ {
+  "nodeid": "tests/test_roaming.py::test_roam[ft]",
+  "suite": "roam",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "roam_ms_log": 56.7,
+   "auth_alg": "FT"
+  },
+  "history": [
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_roam_ft_",
+  "files": [],
+  "classifier_stage": null
+ },
+ {
+  "nodeid": "tests/test_roaming.py::test_roam[full]",
+  "suite": "roam",
+  "outcome": "passed",
+  "duration_s": 4.2,
+  "message": "",
+  "properties": {
+   "roam_ms_log": 159.0
+  },
+  "history": [
+   "passed"
+  ],
+  "when": "2026-09-28T03:05:00+00:00",
+  "artifact_dir": "test_roam_full_",
+  "files": [],
+  "classifier_stage": null
+ }
+]
