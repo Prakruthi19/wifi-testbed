@@ -13,11 +13,13 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import subprocess
 import sys
 import threading
 import uuid
 from collections import Counter
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -135,8 +137,8 @@ class Jobs:
             log = self.log_dir / f"{job_id}.log"
             cmd = cmd or [sys.executable, "-m", "pytest", "-m", suite, "-ra"]
             proc = subprocess.Popen(cmd, cwd=REPO_ROOT, stdout=log.open("w"), stderr=subprocess.STDOUT)
-            job = {"id": job_id, "suite": suite, "status": "running", "returncode": None, "_proc": proc,
-                   "_log": log}
+            job = {"id": job_id, "suite": suite, "status": "running", "returncode": None,
+                   "started": _now(), "finished": None, "_proc": proc, "_log": log}
             self.jobs[job_id] = job
         threading.Thread(target=self._wait, args=(job,), daemon=True).start()
         return self.view(job)
@@ -144,14 +146,41 @@ class Jobs:
     def _wait(self, job: dict) -> None:
         rc = job["_proc"].wait()
         job["returncode"] = rc
+        job["finished"] = _now()
         job["status"] = "passed" if rc == 0 else "failed"
+
+    def current(self) -> dict | None:
+        """The running job, else the most recent one, so a page opened later can pick it up again."""
+        if not self.jobs:
+            return None
+        running = [j for j in self.jobs.values() if j["status"] == "running"]
+        return running[0] if running else max(self.jobs.values(), key=lambda j: j["started"])
 
     def view(self, job: dict) -> dict:
         try:
-            tail = job["_log"].read_text(errors="replace").splitlines()[-40:]
+            lines = job["_log"].read_text(errors="replace").splitlines()
         except OSError:
-            tail = []
-        return {k: v for k, v in job.items() if not k.startswith("_")} | {"log_tail": tail}
+            lines = []
+        return {k: v for k, v in job.items() if not k.startswith("_")} | {"log_tail": lines[-40:],
+                                                                          "progress": _progress(lines)}
+
+
+def _now() -> str:
+    return datetime.now(timezone.utc).isoformat(timespec="seconds")
+
+
+def _progress(lines: list[str]) -> dict:
+    """Tests finished out of tests selected, read from pytest's own output (one character per test)."""
+    total = None
+    done = 0
+    for line in lines:
+        m = re.search(r"collected (\d+) items?(?: / (\d+) deselected)?(?: / (\d+) selected)?", line)
+        if m:
+            total = int(m.group(3) or m.group(1))
+        m = re.match(r"\S+\.py ([.sFExX]+)", line)
+        if m:
+            done += len(m.group(1))
+    return {"done": done, "total": total}
 
 
 class StartRun(BaseModel):
@@ -202,6 +231,11 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
         if not is_root():
             raise HTTPException(403, "lab runs need root: start the API with sudo -E")
         return jobs.start(body.suite)
+
+    @app.get("/api/jobs/current")
+    def current_job():
+        j = jobs.current()
+        return {"job": jobs.view(j) if j else None}
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str):

@@ -69,6 +69,9 @@ export interface Job {
   suite: string
   status: 'running' | 'passed' | 'failed'
   returncode: number | null
+  started: string
+  finished: string | null
+  progress: { done: number; total: number | null }
   log_tail: string[]
 }
 
@@ -89,6 +92,8 @@ export const api = {
   run: (id: string) => get<RunDetail>(`/runs/${encodeURIComponent(id)}`),
   tests: () => get<TestResult[]>('/tests'),
   job: (id: string) => get<Job>(`/jobs/${encodeURIComponent(id)}`),
+  // The running job, else the last one; null before any run (and always in the demo, which has no lab).
+  currentJob: async () => (DEMO ? null : (await get<{ job: Job | null }>('/jobs/current')).job),
 
   async startRun(suite: string): Promise<Job> {
     if (DEMO) throw new Error('The demo cannot start runs; it has no lab behind it.')
