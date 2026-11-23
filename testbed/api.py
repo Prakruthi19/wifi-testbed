@@ -6,11 +6,14 @@
 
 Data comes from reports/history/*.json (written by every pytest run, see testbed/dashboard.py),
 reports/artifacts/<test>/ and lab/inventory.yaml. Passphrases are never sent to the browser.
+Run lists and details are served from an SQLite index of the history files (reports/runs.db, see
+testbed/runstore.py), and JSON answers carry an ETag so an unchanged answer costs a 304 and no body.
 """
 
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import os
 import re
@@ -23,12 +26,13 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request, Response
+from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 
 from testbed import LAB_DIR, REPO_ROOT, REPORTS_DIR
 from testbed import dashboard
+from testbed.runstore import RunStore
 
 # Suites the panel may start. android needs a phone on the host, rf needs real radios, unit is CI's job.
 STARTABLE = [s for s in dashboard.SUITES if s not in ("android", "rf", "unit")] + ["home"]
@@ -92,6 +96,15 @@ def _load_history(p: Path) -> dict | None:
 RECENT_RUNS = 20  # how many runs the Test runs page needs in full (sentences and test history)
 
 
+def _with_artifacts(results: list[dict], reports_dir: Path) -> list[dict]:
+    out = []
+    for x in results:
+        files, stage = _artifacts(x["nodeid"], reports_dir)
+        out.append({**x, "artifact_dir": dashboard.artifact_dir_name(x["nodeid"]),
+                    "files": files, "classifier_stage": stage})
+    return out
+
+
 class Data:
     """Reads the lab's saved files. One instance per request, so new runs show up without a restart;
     the files themselves come from a cache that only re-reads files that changed."""
@@ -122,13 +135,8 @@ class Data:
     def run(self, run_id: str) -> dict | None:
         for r in self.runs:
             if _run_id(r) == run_id:
-                results = []
-                for x in r["results"]:
-                    files, stage = _artifacts(x["nodeid"], self.reports_dir)
-                    results.append({**x, "artifact_dir": dashboard.artifact_dir_name(x["nodeid"]),
-                                    "files": files, "classifier_stage": stage})
                 return {"id": run_id, "finished": r["finished"], "counts": _counts(r["results"]),
-                        "results": results}
+                        "results": _with_artifacts(r["results"], self.reports_dir)}
         return None
 
     def recent(self, n: int = RECENT_RUNS) -> list[dict]:
@@ -222,32 +230,51 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
     jobs = Jobs(reports_dir / "jobs")
     data = lambda: Data(reports_dir, inventory)
 
+    store = RunStore(reports_dir / "runs.db", reports_dir / dashboard.HISTORY)
+
+    def cached(request: Request, make, *salt) -> Response:
+        """HTTP caching: the ETag is the index version (bumped by every new or changed run) plus
+        the URL. If the browser already holds that version it gets 304 and no body, and nothing is
+        computed. Cache-Control: no-cache means "keep it, but ask me before using it"."""
+        store.sync()
+        key = hashlib.sha1(repr((str(request.url), *salt)).encode()).hexdigest()[:12]
+        tag = f'W/"{store.version()}-{key}"'
+        headers = {"ETag": tag, "Cache-Control": "no-cache"}
+        if request.headers.get("if-none-match") == tag:
+            return Response(status_code=304, headers=headers)
+        return JSONResponse(make(), headers=headers)
+
     @app.get("/api/summary")
-    def summary():
-        return data().summary() | {"can_start_runs": is_root(), "startable_suites": STARTABLE}
+    def summary(request: Request):
+        root = is_root()
+        return cached(request, lambda: data().summary() | {"can_start_runs": root, "startable_suites": STARTABLE}, root)
 
     @app.get("/api/lab")
     def lab():
         return data().lab()
 
     @app.get("/api/runs")
-    def runs():
-        return data().run_list()
+    def runs(request: Request, limit: int = 1000, before: str | None = None):
+        return cached(request, lambda: store.list(max(1, min(limit, 1000)), before))
+
+    def detail(run_id: str) -> dict | None:
+        r = store.get(run_id)
+        return r and {**r, "results": _with_artifacts(r["results"], reports_dir)}
 
     @app.get("/api/runs/recent")  # declared before /api/runs/{run_id} so "recent" is not read as an id
-    def recent_runs(n: int = RECENT_RUNS):
-        return data().recent(min(n, 100))
+    def recent_runs(request: Request, n: int = RECENT_RUNS):
+        return cached(request, lambda: [detail(r["id"]) for r in store.list(max(0, min(n, 100)))])
 
     @app.get("/api/runs/{run_id}")
-    def run(run_id: str):
-        r = data().run(run_id)
-        if r is None:
+    def run(request: Request, run_id: str):
+        store.sync()
+        if store.get(run_id) is None:
             raise HTTPException(404, "no such run")
-        return r
+        return cached(request, lambda: detail(run_id))
 
     @app.get("/api/tests")
-    def tests():
-        return data().tests()
+    def tests(request: Request):
+        return cached(request, lambda: data().tests())
 
     @app.get("/api/artifacts/{test_dir}/{name}")
     def artifact(test_dir: str, name: str):

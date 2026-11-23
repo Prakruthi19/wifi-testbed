@@ -136,3 +136,37 @@ def test_history_files_are_parsed_once_until_they_change(lab, monkeypatch):
                      "message": "", "properties": {}}]}))
     assert c.get("/api/runs").json()[0]["id"] == "20260929T010000Z"  # a new run shows up without a restart
     assert reads == ["20260929T010000Z.json"]  # and only the new file was read
+
+
+def test_unchanged_data_returns_304_and_a_new_run_changes_the_etag(lab):
+    c = client(lab)
+    first = c.get("/api/runs")
+    tag = first.headers["etag"]
+    assert first.headers["cache-control"] == "no-cache"
+    again = c.get("/api/runs", headers={"If-None-Match": tag})
+    assert again.status_code == 304 and again.content == b""
+    (lab / "reports" / "history" / "20260929T010000Z.json").write_text(json.dumps({
+        "finished": "2026-09-29T01:00:00+00:00",
+        "results": [{"nodeid": NODE, "suite": "failures", "outcome": "passed", "duration_s": 1,
+                     "message": "", "properties": {}}]}))
+    fresh = c.get("/api/runs", headers={"If-None-Match": tag})
+    assert fresh.status_code == 200 and fresh.json()[0]["id"] == "20260929T010000Z"
+    assert fresh.headers["etag"] != tag
+
+
+def test_runs_are_paged_newest_first(lab):
+    c = client(lab)
+    page1 = c.get("/api/runs?limit=1").json()
+    assert [r["id"] for r in page1] == ["20260928T030000Z"]
+    page2 = c.get(f"/api/runs?limit=1&before={page1[-1]['id']}").json()
+    assert [r["id"] for r in page2] == ["20260927T164700Z"]
+    assert c.get("/api/runs?limit=1&before=20260927T164700Z").json() == []
+
+
+def test_the_index_rebuilds_itself_and_drops_deleted_runs(lab):
+    c = client(lab)
+    assert len(c.get("/api/runs").json()) == 2
+    (lab / "reports" / "runs.db").unlink()
+    assert len(client(lab).get("/api/runs").json()) == 2  # rebuilt from the JSON files
+    (lab / "reports" / "history" / "20260927T164700Z.json").unlink()
+    assert [r["id"] for r in client(lab).get("/api/runs").json()] == ["20260928T030000Z"]
