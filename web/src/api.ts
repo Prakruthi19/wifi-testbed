@@ -89,6 +89,16 @@ export const api = {
   summary: () => get<Summary>('/summary'),
   lab: () => get<Lab>('/lab'),
   runs: () => get<RunSummary[]>('/runs'),
+  // One page of runs, newest first; `before` is the id of the last run already shown (keyset paging).
+  // The demo has a single frozen runs.json, so it is paged here the same way the API pages it.
+  async runsPage(limit: number, before?: string): Promise<RunSummary[]> {
+    if (DEMO) {
+      const all = await get<RunSummary[]>('/runs')
+      return all.filter((r) => !before || r.id < before).slice(0, limit)
+    }
+    const q = new URLSearchParams({ limit: String(limit), ...(before ? { before } : {}) })
+    return get<RunSummary[]>(`/runs?${q}`)
+  },
   run: (id: string) => get<RunDetail>(`/runs/${encodeURIComponent(id)}`),
   // The newest runs in full, in one request (the API caps it; the demo has a frozen copy).
   recentRuns: () => get<RunDetail[]>('/runs/recent'),

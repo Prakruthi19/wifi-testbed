@@ -121,6 +121,12 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
         </tr>
       </tbody>
     </table>
+    <div v-if="tab === 'runs' && store.hasMore && !loading" class="more-row">
+      <button type="button" class="ghost" :disabled="store.loadingMore" @click="store.loadMore()">
+        {{ store.loadingMore ? 'Loading…' : 'Load older runs' }}
+      </button>
+      <span class="muted small">{{ runs.length }} loaded<template v-if="suite || onlyFailing">; filters apply to loaded runs</template></span>
+    </div>
 
     <div v-else class="pad">
       <ResultsGrid :runs="gridRuns" />
@@ -158,6 +164,9 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .filters select { min-height: 34px; padding: 4px 8px; }
 .check input { width: 16px; height: 16px; }
 .pad { padding: 16px; margin: 0; }
+.more-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.ghost:hover:not(:disabled) { background: var(--bg); }
 .error { margin: 16px; }
 
 .runs th { white-space: nowrap; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
