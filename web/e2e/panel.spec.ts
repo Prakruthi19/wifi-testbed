@@ -32,7 +32,10 @@ test('runs list opens a run with failures first and a join timeline', async ({ p
 test('filter shows only runs with failures', async ({ page }) => {
   await page.goto('/#/runs')
   const rows = page.getByRole('table', { name: 'Runs' }).locator('tbody tr')
+  // count() does not wait, so wait for the runs to load before reading it
+  await expect(rows.first()).toBeVisible()
   const before = await rows.count()
+  expect(before).toBeGreaterThan(1)
   await page.getByLabel('Only runs with failures').check()
   await expect(rows).toHaveCount(before - 1)
 })
