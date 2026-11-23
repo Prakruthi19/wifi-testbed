@@ -567,7 +567,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 </template>
 
 <style scoped>
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: stretch; margin-top: 12px; }
+.layout { display: grid; grid-template-columns: minmax(0, 640px) minmax(300px, 1fr); gap: 16px; align-items: stretch; margin-top: 12px; }
 .side { display: grid; align-content: start; }
 .bottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
 .layout .card, .bottom > .card { margin: 0; }
@@ -581,7 +581,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .seg[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .check input { width: 18px; height: 18px; }
-.stat { flex: 1; font-size: 14px; }
+.stat { order: 3; flex-basis: 100%; font-size: 14px; }
 .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
 .stage { position: relative; width: 100%; aspect-ratio: 720 / 480; border-radius: var(--radius); overflow: hidden; }
 .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
