@@ -483,10 +483,6 @@ function nudge(n: Node, e: KeyboardEvent) {
           </li>
         </ul>
       </section>
-    </aside>
-  </div>
-
-  <div class="bottom">
       <section v-if="health" class="card">
         <h2>Health <InfoTip text="From the model, not real radios. 5 GHz devices use 5 GHz down to −72 dBm, then fall back to 2.4 GHz; the waves on the map follow the same rule. Changes here also show on the Sites page." /></h2>
         <p v-if="!health.issues.length" class="allgood"><span aria-hidden="true">✓</span> All access points on, every device has a good signal</p>
@@ -502,6 +498,10 @@ function nudge(n: Node, e: KeyboardEvent) {
           {{ a.name }} <span class="muted">{{ a.detail }}</span>
         </label>
       </section>
+    </aside>
+  </div>
+
+  <div class="bottom">
       <section class="card">
         <h2>Devices</h2>
         <ul class="devs">
@@ -557,8 +557,8 @@ function nudge(n: Node, e: KeyboardEvent) {
 
 <style scoped>
 .layout { display: grid; grid-template-columns: minmax(0, 640px) minmax(300px, 1fr); gap: 16px; align-items: stretch; margin-top: 12px; }
-.side { display: grid; align-content: start; }
-.bottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+.side { display: grid; align-content: start; gap: 16px; }
+.bottom { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
 .layout .card, .bottom > .card { margin: 0; }
 .walkcard { margin-top: 16px; }
 .modeltag { font-size: 12px; font-weight: 600; border: 1px solid var(--skip); background: var(--skip-bg); border-radius: var(--radius-sm); padding: 1px 8px; cursor: help; }
@@ -652,6 +652,10 @@ function nudge(n: Node, e: KeyboardEvent) {
 .issues li { padding: 6px 8px; border-radius: var(--radius); border-left: 4px solid var(--skip); background: var(--skip-bg); }
 .issues li.problem, .issues li.offline { border-color: var(--fail); background: var(--fail-bg); }
 .legend, .devs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
+.devs { grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 12px 24px; }
+.side .legend { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px; font-size: 13px; }
+.side .linekey { grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); font-size: 13px; }
+.side .spaced { margin-top: 14px; }
 .legend i, .toggle i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; vertical-align: -2px; margin-right: 6px; }
 .legend i.empty { border: 1px dashed var(--muted); }
 .toggle { display: flex; align-items: center; gap: 6px; font-size: 14px; padding: 4px 0; flex-wrap: wrap; }
