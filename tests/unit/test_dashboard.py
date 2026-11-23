@@ -62,3 +62,11 @@ def test_save_and_write(tmp_path):
                          "message": "ap1 missing", "properties": {}}], tmp_path)
     page = dashboard.write(tmp_path)
     assert "Roaming" in page.read_text() and "ap1 missing" in page.read_text()
+
+
+def test_save_run_also_indexes_the_run_for_the_api(tmp_path):
+    from testbed.runstore import RunStore
+    path = dashboard.save_run([{"nodeid": "t::a", "suite": "roam", "outcome": "passed", "duration_s": 1,
+                                "message": "", "properties": {}}], tmp_path)
+    store = RunStore(tmp_path / "runs.db", tmp_path / dashboard.HISTORY)
+    assert [r["id"] for r in store.list()] == [path.stem]  # there before any API request

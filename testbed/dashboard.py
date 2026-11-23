@@ -101,6 +101,11 @@ def save_run(results: list[dict], reports_dir: Path = REPORTS_DIR) -> Path | Non
     path = d / f"{started:%Y%m%dT%H%M%S%fZ}.json"
     path.write_text(json.dumps({"finished": started.isoformat(timespec="seconds"),
                                 "results": results}, indent=1))
+    try:  # write-time indexing for the web API; the JSON file above is what counts if this fails
+        from testbed.runstore import RunStore
+        RunStore(reports_dir / "runs.db", d).add(path)
+    except Exception:  # noqa: BLE001 - never fail a test session over the index
+        pass
     return path
 
 
