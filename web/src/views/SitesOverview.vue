@@ -193,10 +193,10 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .switch input:checked + .track span { transform: translateX(16px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
-.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
-.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; display: grid; gap: 2px; }
-.kpi .k { font-size: 12px; color: var(--muted); }
-.kpi b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; margin-bottom: 16px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; display: grid; gap: 6px; box-shadow: var(--shadow); }
+.kpi .k { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+.kpi b { font-size: 28px; font-weight: 700; letter-spacing: -0.02em; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .kpi small { font-size: 14px; font-weight: 400; color: var(--muted); }
 .kpi.red b { color: var(--fail); }
 .kpi.amber b { color: var(--skip); }
@@ -204,16 +204,16 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 /* One screen: the three panels fill the rest of the window and scroll inside. */
 .dash { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; height: calc(100vh - 250px); min-height: 440px; }
 .rail { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; min-height: 0; }
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; min-height: 0; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; box-shadow: var(--shadow); display: flex; flex-direction: column; min-height: 0; }
 .panel h2 { font-size: 15px; margin: 0 0 8px; }
 .count { font-size: 12px; font-weight: 600; background: var(--bg); border-radius: var(--radius-sm); padding: 1px 8px; margin-left: 4px; }
 .scroller { overflow: auto; min-height: 0; flex: 1; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
 .toolbar h2 { margin: 0 8px 0 0; }
 .toolbar input[type='search'] { flex: 1; min-width: 160px; min-height: 36px; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-.segs { display: flex; gap: 2px; background: var(--bg); border-radius: var(--radius); padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 10px; font-size: 13px; border-radius: var(--radius); }
-.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
+.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
+.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
+.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 .livehint { margin: -4px 0 8px; display: flex; align-items: center; gap: 8px; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--pass); animation: pulse 1.6s ease-in-out infinite; flex: none; }
 @keyframes pulse { 50% { opacity: 0.25; } }
@@ -229,7 +229,7 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .name { font-weight: 600; color: var(--ink); text-decoration: none; }
 .name:hover, .name:focus-visible { text-decoration: underline; }
 .thumb { width: 84px; }
-.issue { color: var(--fail); font-size: 13px; }
+.issue { color: var(--ink); font-size: 13px; }
 .issue.none { color: var(--pass); }
 .num { font-variant-numeric: tabular-nums; white-space: nowrap; }
 

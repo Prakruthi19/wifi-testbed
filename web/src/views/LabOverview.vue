@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InfoTip from '../components/InfoTip.vue'
 import { computed, onMounted, ref } from 'vue'
 import { api, formatTime, type Lab } from '../api'
 import { useSummary } from '../stores/summary'
@@ -29,32 +30,29 @@ const band = (channel: number) => (channel > 14 ? '5 GHz' : '2.4 GHz')
 </script>
 
 <template>
-  <h1>Lab overview</h1>
-  <p class="sub">Access points, client radios and networks in the emulated lab, and how the latest tests went.</p>
+  <h1>Lab overview <InfoTip text="Access points, client radios and networks in the emulated lab (virtual radios in a Linux VM), and how the latest tests went." /></h1>
 
   <p v-if="error || summary.error" class="error">Could not load lab data: {{ error ?? summary.error }}</p>
 
   <div v-if="summary.data" class="tiles">
     <div class="tile"><b>{{ summary.data.tests }}</b><span>tests tracked</span></div>
-    <div class="tile"><b>{{ summary.data.counts.passed }}</b><span>passing now</span></div>
-    <div class="tile"><b>{{ summary.data.counts.failed + summary.data.counts.error }}</b><span>failing now</span></div>
+    <div class="tile"><b class="okn">{{ summary.data.counts.passed }}</b><span>passing now</span></div>
+    <div class="tile"><b :class="{ badn: summary.data.counts.failed + summary.data.counts.error }">{{ summary.data.counts.failed + summary.data.counts.error }}</b><span>failing now</span></div>
     <div class="tile"><b>{{ summary.data.runs }}</b><span>runs recorded</span></div>
   </div>
   <div v-if="summary.data" class="card">
-    <h2>Latest result of every test</h2>
+    <div class="cardhead"><h2>Latest result of every test</h2><RouterLink to="/runs">All runs →</RouterLink></div>
     <CountsBar :counts="summary.data.counts" />
-    <p class="muted">Last run finished {{ formatTime(summary.data.last_finished) }}. <RouterLink to="/runs">See all runs</RouterLink></p>
+    <p class="muted small">Last run {{ formatTime(summary.data.last_finished) }}</p>
   </div>
 
   <div class="maps">
     <section v-if="homeAps.length" class="card">
-      <h2>Home mesh: channel map</h2>
-      <p class="muted">Router and two mesh points with one Wi-Fi name. <RouterLink to="/coverage">Plan their placement →</RouterLink></p>
+      <div class="cardhead"><h2>Home mesh channels <InfoTip text="Router and two mesh points sharing one Wi-Fi name." /></h2><RouterLink to="/coverage">Coverage →</RouterLink></div>
       <ChannelMap :aps="homeAps" />
     </section>
     <section v-if="qualifyAps.length" class="card">
-      <h2>Qualification APs: channel map</h2>
-      <p class="muted">Every AP in the inventory must pass the baseline suite before the full matrix runs.</p>
+      <h2>Qualification AP channels <InfoTip text="Every AP in the inventory must pass the baseline suite before the full matrix runs." /></h2>
       <ChannelMap :aps="qualifyAps" />
     </section>
   </div>
@@ -92,6 +90,7 @@ const band = (channel: number) => (channel > 14 ? '5 GHz' : '2.4 GHz')
 </template>
 
 <style scoped>
+.okn { color: var(--pass); } .badn { color: var(--fail); }
 .maps { display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(min(100%, 460px), 1fr)); margin-bottom: 16px; }
 .maps .card { margin-bottom: 0; }
 </style>

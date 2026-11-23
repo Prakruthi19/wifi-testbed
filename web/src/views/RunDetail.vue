@@ -178,7 +178,7 @@ function verdict(r: TestResult, expectStop?: string) {
 .status.bad { color: var(--fail); background: var(--fail-bg); }
 .status.skip { color: var(--skip); background: var(--skip-bg); }
 
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px; padding: 0 16px; border-bottom: 1px solid var(--line); }
 .tabs { display: flex; gap: 4px; flex-wrap: wrap; }
 .tabs button { background: none; color: var(--muted); border-radius: 0; padding: 14px 10px 12px; border-bottom: 2px solid transparent; font-weight: 600; min-height: 0; }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InfoTip from '../components/InfoTip.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import WalkChart, { type WalkSample } from '../components/WalkChart.vue'
 import StatusBadge from '../components/StatusBadge.vue'
@@ -462,21 +463,19 @@ function nudge(n: Node, e: KeyboardEvent) {
             {{ readout.where }}:
             <span v-for="p in readout.per" :key="p.name" class="per">{{ p.name }} {{ p.dbm }} dBm ({{ p.walls }} wall{{ p.walls === 1 ? '' : 's' }})</span>
           </template>
-          <template v-else>Move the pointer over the house to read the modelled signal from each access point.</template>
+          <template v-else><span class="muted">Hover the house to read the signal at any spot</span></template>
         </p>
       </section>
 
     <aside class="side">
       <section class="card">
-        <h2>Signal waves</h2>
-        <p class="muted small">Each device sends a wave to the access point it uses. The wave's shape and colour show how strong that signal is.</p>
+        <h2>Signal waves <InfoTip text="Each device sends a wave to the access point it uses. The wave's shape and colour show how strong that signal is." /></h2>
         <ul class="linekey key">
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -50)" class="good" /></svg>Good: tight waves, −67 dBm or stronger</li>
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -70)" class="weak" /></svg>Weak: long waves, −67 to −75 dBm</li>
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -90)" class="bad" /></svg>Unusable: flat, broken, below −75 dBm</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -50)" class="good" /></svg>Good <span class="muted">≥ −67 dBm</span></li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -70)" class="weak" /></svg>Weak <span class="muted">−67 to −75</span></li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -90)" class="bad" /></svg>Unusable <span class="muted">&lt; −75</span></li>
         </ul>
-        <h2 class="spaced">Signal levels</h2>
-        <p class="muted small">dBm is the received signal power; closer to 0 is stronger, and every 10 dB less is ten times weaker.</p>
+        <h2 class="spaced">Signal levels <InfoTip text="dBm is the received signal power: closer to 0 is stronger, and every 10 dB less is ten times weaker." /></h2>
         <ul class="legend">
           <li v-for="l in LEVELS" :key="l.label">
             <i :style="{ background: l.color ? `rgb(${l.color.join(',')})` : 'transparent' }" :class="{ empty: !l.color }" />
@@ -489,18 +488,14 @@ function nudge(n: Node, e: KeyboardEvent) {
 
   <div class="bottom">
       <section v-if="health" class="card">
-        <h2>Health</h2>
-        <p v-if="!health.issues.length" class="good">No problems: every access point is on and every device has a good signal.</p>
+        <h2>Health <InfoTip text="From the model, not real radios. 5 GHz devices use 5 GHz down to −72 dBm, then fall back to 2.4 GHz; the waves on the map follow the same rule. Changes here also show on the Sites page." /></h2>
+        <p v-if="!health.issues.length" class="allgood"><span aria-hidden="true">✓</span> All access points on, every device has a good signal</p>
         <ul v-else class="issues">
           <li v-for="i in health.issues" :key="i.key" :class="i.severity">{{ i.text }}</li>
         </ul>
-        <p class="muted small">
-          From the model, not real radios. 5 GHz devices use 5 GHz down to −72 dBm, then fall back to 2.4 GHz; the map's
-          waves follow the same rule. Changes here also show on <RouterLink to="/sites">Sites</RouterLink>.
-        </p>      </section>
+     </section>
       <section class="card">
-        <h2>Access points</h2>
-        <p class="muted small">Switch one off to see what a "mesh point down" test covers.</p>
+        <h2>Access points <InfoTip text="Switch one off to see what a 'mesh point down' test covers." /></h2>
         <label v-for="(a, i) in aps" :key="a.name" class="toggle">
           <input v-model="a.on" type="checkbox" />
           <i :style="{ background: SERIES[i] }" />
@@ -522,7 +517,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 
   <section class="card walkcard" aria-labelledby="walk-h">
         <div class="walkhead">
-          <h2 id="walk-h">Walk the phone</h2>
+          <h2 id="walk-h">Walk the phone <InfoTip :text="`The phone walks through every room at ${WALK_MPS} m/s. Like a real phone it is sticky: it keeps its access point until the signal drops below ${ROAM_BELOW} dBm and another one is at least ${ROAM_MARGIN} dB stronger. A simplified, typical rule; real phones differ.`" /></h2>
           <button type="button" class="primary" @click="startWalk">
             {{ walk.state === 'walking' ? '❚❚ Pause' : walk.state === 'paused' ? '▶ Keep walking' : walk.state === 'done' ? '↺ Walk again' : '▶ Walk the phone' }}
           </button>
@@ -530,12 +525,6 @@ function nudge(n: Node, e: KeyboardEvent) {
             <button v-for="s in [1, 3, 10]" :key="s" type="button" class="seg" :aria-pressed="speed === s" @click="speed = s">{{ s }}×</button>
           </div>
         </div>
-        <p class="muted small rule">
-          The phone walks from the office through every room at {{ WALK_MPS }} m/s. Like a real phone it is sticky: it
-          keeps its access point until that signal drops below {{ ROAM_BELOW }} dBm <i>and</i> another one is at least
-          {{ ROAM_MARGIN }} dB stronger. Real phones each use their own rules; this is a simplified, typical one. Try it on
-          both bands, or switch a mesh point off first.
-        </p>
 
         <div class="now" aria-live="polite">
           <template v-if="walkNow">
@@ -560,7 +549,7 @@ function nudge(n: Node, e: KeyboardEvent) {
                 <span class="ts">{{ l.t.toFixed(1) }} s</span> {{ l.text }}
               </li>
             </ol>
-            <p v-else class="muted small">Every join and change of access point will be listed here.</p>
+            <p v-else class="muted small">Joins and roams appear here.</p>
           </div>
         </div>
       </section>
@@ -576,9 +565,9 @@ function nudge(n: Node, e: KeyboardEvent) {
 @media (max-width: 960px) { .layout, .bottom { grid-template-columns: 1fr; } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
 .seglabel { font-size: 14px; color: var(--muted); }
-.segs { display: flex; gap: 4px; }
-.seg { background: var(--bg); color: var(--ink); border: 1px solid var(--line); min-height: 36px; padding: 6px 12px; }
-.seg[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
+.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
+.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .check input { width: 18px; height: 18px; }
 .stat { order: 3; flex-basis: 100%; font-size: 14px; }
@@ -670,5 +659,6 @@ function nudge(n: Node, e: KeyboardEvent) {
 .toggle i { margin-right: 0; border-radius: 50%; }
 .small { font-size: 12px; margin: 2px 0 6px; }
 .good { color: var(--pass); }
+.allgood { margin: 0; padding: 10px 12px; border-radius: var(--radius); background: var(--pass-bg); color: var(--pass); font-weight: 600; font-size: 13px; }
 .badtxt { color: var(--fail); }
 </style>

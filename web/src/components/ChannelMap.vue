@@ -115,7 +115,7 @@ const info = computed(() => props.aps.find((a) => a.name === hovered.value) ?? n
         <template v-if="info.ssid"> · Wi-Fi name {{ info.ssid }}</template>
         <template v-if="info.security"> · {{ info.security }}</template>
       </template>
-      <template v-else>Hover or tab to an access point for its details.</template>
+      <template v-else><span class="muted">Hover an access point for details</span></template>
     </p>
     <ul v-if="overlaps.length" class="warn">
       <li v-for="o in overlaps" :key="o">⚠ {{ o }}</li>
@@ -125,9 +125,9 @@ const info = computed(() => props.aps.find((a) => a.name === hovered.value) ?? n
 </template>
 
 <style scoped>
-.controls { display: flex; gap: 4px; margin-bottom: 8px; }
-.seg { background: var(--bg); color: var(--ink); border: 1px solid var(--line); min-height: 36px; padding: 6px 12px; }
-.seg[aria-pressed='true'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.controls { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; margin-bottom: 10px; }
+.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
+.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 svg { width: 100%; height: auto; display: block; }
 .axis { stroke: var(--muted); stroke-width: 1; }
 .grid { stroke: var(--line); stroke-dasharray: 2 4; }
