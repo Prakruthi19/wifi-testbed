@@ -6,7 +6,7 @@ import { api, type RunDetail, type RunSummary } from '../api'
 // fetching everything again. Data younger than FRESH_MS is reused as is; older data stays on
 // screen while a refresh runs in the background (stale-while-revalidate).
 const FRESH_MS = 30_000
-export const PAGE = 50 // runs per page in the list
+export const PAGE = 10 // runs per page: the table shows one page, Next fetches the next one
 
 export const useRuns = defineStore('runs', () => {
   const runs = ref<RunSummary[]>([])

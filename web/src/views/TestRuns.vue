@@ -3,7 +3,7 @@ import InfoTip from '../components/InfoTip.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatTime } from '../api'
-import { useRuns } from '../stores/runs'
+import { PAGE, useRuns } from '../stores/runs'
 import { SUITES } from '../describe'
 import { formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
 import { useJobs } from '../stores/jobs'
@@ -29,10 +29,25 @@ const suites = computed(() => [...new Set(runs.value.flatMap((r) => r.suites))].
 const shown = computed(() =>
   runs.value.filter((r) => (!suite.value || r.suites.includes(suite.value)) && (!onlyFailing.value || r.counts.failed + r.counts.error > 0)),
 )
+// 10 runs per page. The API sends one page at a time (keyset: before=<last id>), so Next fetches
+// from the server only when it reaches the end of what is loaded; going back reuses loaded pages.
+const ROWS = PAGE
+const page = ref(1)
+watch([suite, onlyFailing], () => (page.value = 1))
+const pages = computed(() => Math.max(1, Math.ceil(shown.value.length / ROWS)))
+const pageRows = computed(() => shown.value.slice((page.value - 1) * ROWS, page.value * ROWS))
+const from = computed(() => (shown.value.length ? (page.value - 1) * ROWS + 1 : 0))
+const to = computed(() => Math.min(page.value * ROWS, shown.value.length))
+const canNext = computed(() => page.value < pages.value || store.hasMore)
+async function next() {
+  if (page.value >= pages.value && store.hasMore) await store.loadMore()
+  if (page.value < pages.value) page.value++
+}
 const gridRuns = computed(() => shown.value.slice(0, 20).map((r) => details.value[r.id]).filter(Boolean))
 
 // Tests that switched between pass and fail across the loaded runs (same rule as the Test history tab).
-const recentDetails = computed(() => runs.value.slice(0, 20).map((r) => details.value[r.id]).filter(Boolean))
+// The list now loads 10 at a time, so read the newest 20 from the full runs the store already has.
+const recentDetails = computed(() => Object.values(details.value).sort((x, y) => (x.id < y.id ? 1 : -1)).slice(0, 20))
 const flaky = computed(() => testHistories(recentDetails.value).filter((h) => h.changes).length)
 const latest = computed(() => runs.value[0] ?? null)
 const passRate = computed(() => {
@@ -81,7 +96,7 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
   </section>
 
   <div class="tiles kpis">
-    <div class="tile"><span>Runs</span><b>{{ runs.length }}</b></div>
+    <div class="tile"><span>Runs loaded</span><b>{{ runs.length }}{{ store.hasMore ? '+' : '' }}</b></div>
     <div class="tile"><span>Latest run</span><b class="small" :class="latest ? tone(latest.counts) : ''">{{ latest ? runSentence(latest.counts, details[latest.id]?.results) : '—' }}</b></div>
     <div class="tile"><span>Pass rate, latest run</span><b>{{ passRate === null ? '—' : passRate + '%' }}</b></div>
     <div class="tile"><span>Changed result <InfoTip text="Tests that passed in one run and failed in another. Not all are flaky: a known cause, like the lab not being set up, also counts." /></span><b :class="{ warn: flaky }">{{ flaky }}</b></div>
@@ -111,7 +126,7 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     <table v-else-if="tab === 'runs'" class="stack runs" aria-label="Runs">
       <thead><tr><th>Result</th><th>Finished</th><th>Suites</th><th>Summary</th><th>Tests</th><th>Test time</th></tr></thead>
       <tbody>
-        <tr v-for="r in shown" :key="r.id" :class="tone(r.counts)" @click="open(r.id)">
+        <tr v-for="r in pageRows" :key="r.id" :class="tone(r.counts)" @click="open(r.id)">
           <td data-label="Result"><span class="status" :class="tone(r.counts)">{{ tone(r.counts) === 'bad' ? 'Failed' : tone(r.counts) === 'good' ? 'Passed' : 'Skipped' }}</span></td>
           <td data-label="Finished"><RouterLink :to="{ name: 'run', params: { id: r.id } }" @click.stop>{{ formatTime(r.finished) }}</RouterLink></td>
           <td data-label="Suites" class="hide-sm">{{ r.suites.map((s) => (s === 'other' ? 'Other' : SUITES[s] ?? s)).join(', ') }}</td>
@@ -121,16 +136,18 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
         </tr>
       </tbody>
     </table>
-    <div v-if="tab === 'runs' && store.hasMore && !loading" class="more-row">
-      <button type="button" class="ghost" :disabled="store.loadingMore" @click="store.loadMore()">
-        {{ store.loadingMore ? 'Loading…' : 'Load older runs' }}
-      </button>
-      <span class="muted small">{{ runs.length }} loaded<template v-if="suite || onlyFailing">; filters apply to loaded runs</template></span>
-    </div>
-
     <div v-else class="pad">
       <ResultsGrid :runs="gridRuns" />
     </div>
+
+    <nav v-if="tab === 'runs' && !loading && !error && shown.length" class="pager" aria-label="Pages">
+      <span class="muted small">{{ from }}–{{ to }} of {{ shown.length }}{{ store.hasMore ? '+' : '' }} runs<template v-if="suite || onlyFailing"> (filtered)</template></span>
+      <div class="pages">
+        <button type="button" class="ghost" :disabled="page === 1" aria-label="Previous page" @click="page--">‹ Prev</button>
+        <button v-for="n in pages" :key="n" type="button" class="ghost num" :aria-current="n === page ? 'page' : undefined" @click="page = n">{{ n }}</button>
+        <button type="button" class="ghost" :disabled="!canNext || store.loadingMore" aria-label="Next page" @click="next()">{{ store.loadingMore ? 'Loading…' : 'Next ›' }}</button>
+      </div>
+    </nav>
   </div>
 </template>
 
@@ -164,7 +181,12 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .filters select { min-height: 34px; padding: 4px 8px; }
 .check input { width: 16px; height: 16px; }
 .pad { padding: 16px; margin: 0; }
-.more-row { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.pages { display: flex; flex-wrap: wrap; gap: 4px; }
+.pages button { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.pages .num { min-width: 34px; }
+.pages [aria-current='page'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.ghost:disabled { opacity: .45; cursor: default; }
 .ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
 .ghost:hover:not(:disabled) { background: var(--bg); }
 .error { margin: 16px; }
