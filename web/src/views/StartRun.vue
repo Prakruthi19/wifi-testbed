@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InfoTip from '../components/InfoTip.vue'
 import { computed, ref } from 'vue'
 import { DEMO } from '../api'
 import { useJobs } from '../stores/jobs'
@@ -15,8 +16,7 @@ const pct = computed(() => {
 </script>
 
 <template>
-  <h1>Start a run</h1>
-  <p class="sub">Runs one pytest suite against the lab. Only one run at a time, because the tests share the radios.</p>
+  <h1>Start a run <InfoTip text="Runs one pytest suite against the lab. One run at a time, because the tests share the radios." /></h1>
 
   <p v-if="DEMO" class="error">This is the read-only demo. Starting runs needs the API running in the lab VM.</p>
   <p v-else-if="summary.data && !summary.data.can_start_runs" class="error">
@@ -41,7 +41,7 @@ const pct = computed(() => {
       {{ job.progress.done }} of {{ job.progress.total }} tests finished
       <progress :value="job.progress.done" :max="job.progress.total" :aria-label="`${pct}% of tests finished`" />
     </p>
-    <p v-if="job.status === 'running'" class="muted">You can leave this page: the run keeps going, and the top bar shows it on every page.</p>
+    <p v-if="job.status === 'running'" class="muted small">Safe to leave this page: the run keeps going.</p>
     <pre>{{ job.log_tail.join('\n') || 'Waiting for output…' }}</pre>
     <RouterLink v-if="job.status !== 'running'" to="/runs">See it in Test runs</RouterLink>
   </section>

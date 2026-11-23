@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import InfoTip from '../components/InfoTip.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, formatTime, type RunDetail, type RunSummary } from '../api'
@@ -71,7 +72,6 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
   <div class="head">
     <div>
       <h1>Test runs</h1>
-      <p class="sub">Every pytest session run in the lab, newest first.</p>
     </div>
     <RouterLink to="/start" class="btn">Start a run</RouterLink>
   </div>
@@ -94,7 +94,7 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     <div class="tile"><span>Runs</span><b>{{ runs.length }}</b></div>
     <div class="tile"><span>Latest run</span><b class="small" :class="latest ? tone(latest.counts) : ''">{{ latest ? runSentence(latest.counts, details[latest.id]?.results) : '—' }}</b></div>
     <div class="tile"><span>Pass rate, latest run</span><b>{{ passRate === null ? '—' : passRate + '%' }}</b></div>
-    <div class="tile" title="Tests that passed in one run and failed in another. Not all of these are flaky: a known cause, like the lab not being set up, also counts."><span>Changed result</span><b :class="{ warn: flaky }">{{ flaky }}</b></div>
+    <div class="tile"><span>Changed result <InfoTip text="Tests that passed in one run and failed in another. Not all are flaky: a known cause, like the lab not being set up, also counts." /></span><b :class="{ warn: flaky }">{{ flaky }}</b></div>
   </div>
 
   <div class="panel">
@@ -157,7 +157,7 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .fill { height: 100%; background: var(--accent); transition: width .4s; }
 .live pre { margin: 8px 0 0; max-height: 90px; }
 
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); overflow: hidden; }
 .toolbar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; padding: 0 16px; border-bottom: 1px solid var(--line); }
 .tabs { display: flex; gap: 4px; }
 .tabs button { background: none; color: var(--muted); border-radius: 0; padding: 14px 10px 12px; border-bottom: 2px solid transparent; font-weight: 600; min-height: 0; }

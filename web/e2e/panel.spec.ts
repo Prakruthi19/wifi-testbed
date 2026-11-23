@@ -56,7 +56,7 @@ test('no sideways scrolling on any page', async ({ page }) => {
 
 test('channel map flags no overlap for the home mesh on 1, 6 and 11', async ({ page }) => {
   await page.goto('/')
-  const home = page.locator('section', { hasText: 'Home mesh: channel map' })
+  const home = page.locator('section', { hasText: 'Home mesh channels' })
   await expect(home.getByText('No overlapping channels')).toBeVisible()
   await home.locator('g.ap').first().focus()
   await expect(home.getByText(/channel \d+ \(\d+ MHz centre/)).toBeVisible()

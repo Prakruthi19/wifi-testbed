@@ -61,6 +61,7 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
         <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="ICON.coverage" /></svg>
         <span class="label">Wi-Fi Test Lab</span>
       </RouterLink>
+      <div class="navhead label">Menu</div>
       <nav>
         <RouterLink v-for="n in NAV" :key="n.to" :to="n.to" class="navitem" :class="{ on: active(n.to) }" :aria-current="active(n.to) ? 'page' : undefined" :title="n.label">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="ICON[n.icon]" /></svg>
@@ -96,37 +97,38 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
 <style scoped>
 .shell { display: grid; grid-template-columns: 232px minmax(0, 1fr); min-height: 100vh; }
 .shell.collapsed { grid-template-columns: 64px minmax(0, 1fr); }
-.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; padding: 12px 10px; background: var(--card); border-right: 1px solid var(--line); }
-.brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-weight: 700; color: var(--ink); text-decoration: none; white-space: nowrap; }
-.brand svg { width: 26px; height: 26px; flex: none; stroke: var(--accent); stroke-width: 2.2; }
+.side { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; gap: 4px; padding: 16px 12px; background: var(--nav); color: var(--nav-ink); }
+.brand { display: flex; align-items: center; gap: 10px; padding: 4px 6px 22px; font-weight: 700; font-size: 15px; letter-spacing: -0.01em; color: var(--nav-on); text-decoration: none !important; white-space: nowrap; }
+.brand svg { width: 32px; height: 32px; flex: none; padding: 6px; border-radius: var(--radius); background: linear-gradient(135deg, #6366f1, #8b5cf6); stroke: #fff; stroke-width: 2.4; }
+.navhead { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em; padding: 0 10px 6px; opacity: .7; }
 nav { display: grid; gap: 2px; }
-.navitem { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 8px 10px; border-radius: var(--radius); color: var(--muted); text-decoration: none; white-space: nowrap; font-size: 14px; background: none; border: 0; width: 100%; text-align: left; }
-.navitem:hover { background: var(--bg); color: var(--ink); }
-.navitem.on { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--ink); font-weight: 600; }
-.navitem.on svg { stroke: var(--accent); }
+.navitem { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 8px 10px; border-radius: var(--radius); color: var(--nav-ink); text-decoration: none !important; white-space: nowrap; font-size: 14px; font-weight: 500; background: none; border: 0; width: 100%; text-align: left; }
+.navitem:hover { background: var(--nav-hover); color: var(--nav-on); }
+.navitem.on { background: #4f46e5; color: #fff; font-weight: 600; box-shadow: 0 4px 12px rgba(79, 70, 229, .35); }
 svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .collapse { margin-top: auto; }
 .collapsed .label { display: none; }
 .collapsed .navitem, .collapsed .brand { justify-content: center; padding-left: 0; padding-right: 0; }
 .collapsed .collapse svg { transform: rotate(180deg); }
 .main { min-width: 0; display: flex; flex-direction: column; }
-.topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 24px; background: var(--card); border-bottom: 1px solid var(--line); }
-.crumb { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip { font-size: 12px; border-radius: var(--radius-sm); padding: 3px 10px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 60px; padding: 0 28px; background: color-mix(in srgb, var(--card) 85%, transparent); backdrop-filter: blur(8px); border-bottom: 1px solid var(--line); }
+.crumb { flex: 1; font-size: 14px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 4px 12px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .chip.live { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-color: var(--accent); }
 .chip.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
 @media (prefers-reduced-motion: reduce) { .chip.live .dot { animation: none; } }
 .chip.warn { color: var(--skip); background: var(--skip-bg); border-color: transparent; }
-.iconbtn { background: none; color: var(--ink); border: 1px solid var(--line); min-height: 36px; width: 36px; padding: 0; display: grid; place-items: center; }
+.iconbtn { background: var(--card); color: var(--ink); border: 1px solid var(--line); min-height: 36px; width: 36px; border-radius: 999px; padding: 0; display: grid; place-items: center; }
 .iconbtn:hover { background: var(--bg); }
-main { padding: 20px 24px 40px; max-width: 1600px; width: 100%; }
+main { padding: 28px 28px 48px; max-width: 1600px; width: 100%; }
 
 /* Phones: the sidebar becomes a bottom tab bar. */
 @media (max-width: 760px) {
   .shell, .shell.collapsed { grid-template-columns: minmax(0, 1fr); }
-  .side { position: fixed; z-index: 10; inset: auto 0 0 0; height: auto; flex-direction: row; padding: 4px; border-right: 0; border-top: 1px solid var(--line); }
-  .brand, .collapse { display: none; }
+  .side { position: fixed; z-index: 10; inset: auto 0 0 0; height: auto; flex-direction: row; padding: 4px; }
+  .brand, .collapse, .navhead { display: none; }
+  .navitem.on { box-shadow: none; }
   nav { grid-auto-flow: column; grid-auto-columns: 1fr; width: 100%; }
   .navitem, .collapsed .navitem { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 2px; justify-content: center; text-align: center; min-height: 52px; }
   .collapsed .label { display: inline; }
