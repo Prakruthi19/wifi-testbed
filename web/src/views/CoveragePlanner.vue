@@ -305,16 +305,12 @@ function nudge(n: Node, e: KeyboardEvent) {
     <StatusBadge v-if="health" :status="health.status" />
     <span v-if="site?.simulated" class="simtag">Simulated site</span>
     <span v-if="site" class="muted">{{ site.area }}</span>
+    <span class="modeltag" :title="`Signal comes from a standard indoor formula: distance loss plus ${BAND_MODEL[band].wallDb} dB per wall on ${BAND_MODEL[band].label}. The lab's radios are emulated.`">
+      This is a model, not a measurement
+    </span>
   </div>
-  <p class="sub">
-    A furnished floor plan of {{ site?.simulated ? 'this simulated home' : "the lab's home network" }}. Drag the router, mesh points and devices, switch access points
-    off, or walk the phone through the rooms and watch it change access point. <b>This is a model, not a
-    measurement:</b> the lab's radios are emulated, so the signal comes from a standard indoor formula (distance loss
-    plus {{ BAND_MODEL[band].wallDb }} dB per wall on {{ BAND_MODEL[band].label }}).
-  </p>
 
   <div class="layout">
-    <div>
       <section class="card plan">
         <div class="toolbar">
           <span class="seglabel" id="floor-band">Floor colours:</span>
@@ -324,7 +320,7 @@ function nudge(n: Node, e: KeyboardEvent) {
             </button>
           </div>
           <label class="check"><input v-model="showHeat" type="checkbox" /> Signal colours</label>
-          <span class="stat"><b>{{ coverage }}%</b> of the house good enough for video calls</span>
+          <span class="stat"><b>{{ coverage }}%</b> of the house good for video calls</span>
           <button type="button" class="seg" @click="reset">Reset</button>
         </div>
 
@@ -470,7 +466,61 @@ function nudge(n: Node, e: KeyboardEvent) {
         </p>
       </section>
 
-      <section class="card walkcard" aria-labelledby="walk-h">
+    <aside class="side">
+      <section class="card">
+        <h2>Signal waves</h2>
+        <p class="muted small">Each device sends a wave to the access point it uses. The wave's shape and colour show how strong that signal is.</p>
+        <ul class="linekey key">
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -50)" class="good" /></svg>Good: tight waves, −67 dBm or stronger</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -70)" class="weak" /></svg>Weak: long waves, −67 to −75 dBm</li>
+          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -90)" class="bad" /></svg>Unusable: flat, broken, below −75 dBm</li>
+        </ul>
+        <h2 class="spaced">Signal levels</h2>
+        <p class="muted small">dBm is the received signal power; closer to 0 is stronger, and every 10 dB less is ten times weaker.</p>
+        <ul class="legend">
+          <li v-for="l in LEVELS" :key="l.label">
+            <i :style="{ background: l.color ? `rgb(${l.color.join(',')})` : 'transparent' }" :class="{ empty: !l.color }" />
+            {{ l.label }}
+          </li>
+        </ul>
+      </section>
+    </aside>
+  </div>
+
+  <div class="bottom">
+      <section v-if="health" class="card">
+        <h2>Health</h2>
+        <p v-if="!health.issues.length" class="good">No problems: every access point is on and every device has a good signal.</p>
+        <ul v-else class="issues">
+          <li v-for="i in health.issues" :key="i.key" :class="i.severity">{{ i.text }}</li>
+        </ul>
+        <p class="muted small">
+          From the model, not real radios. 5 GHz devices use 5 GHz down to −72 dBm, then fall back to 2.4 GHz; the map's
+          waves follow the same rule. Changes here also show on <RouterLink to="/sites">Sites</RouterLink>.
+        </p>      </section>
+      <section class="card">
+        <h2>Access points</h2>
+        <p class="muted small">Switch one off to see what a "mesh point down" test covers.</p>
+        <label v-for="(a, i) in aps" :key="a.name" class="toggle">
+          <input v-model="a.on" type="checkbox" />
+          <i :style="{ background: SERIES[i] }" />
+          {{ a.name }} <span class="muted">{{ a.detail }}</span>
+        </label>
+      </section>
+      <section class="card">
+        <h2>Devices</h2>
+        <ul class="devs">
+          <li v-for="l in links" :key="l.d.name">
+            <b>{{ l.d.name }}</b>{{ " " }}
+            <span v-if="l.hidden" class="muted">walking (see Walk the phone)</span>
+            <span v-else :class="l.usable ? 'good' : 'badtxt'">{{ l.text }}</span>
+            <div class="muted small">{{ l.d.detail }}</div>
+          </li>
+        </ul>
+      </section>
+  </div>
+
+  <section class="card walkcard" aria-labelledby="walk-h">
         <div class="walkhead">
           <h2 id="walk-h">Walk the phone</h2>
           <button type="button" class="primary" @click="startWalk">
@@ -514,65 +564,16 @@ function nudge(n: Node, e: KeyboardEvent) {
           </div>
         </div>
       </section>
-    </div>
-
-    <aside class="side">
-      <section v-if="health" class="card">
-        <h2>Health</h2>
-        <p v-if="!health.issues.length" class="good">No problems: every access point is on and every device has a good signal.</p>
-        <ul v-else class="issues">
-          <li v-for="i in health.issues" :key="i.key" :class="i.severity">{{ i.text }}</li>
-        </ul>
-        <p class="muted small">
-          Status comes from the model, not real radios. Devices with a 5 GHz radio use 5 GHz while it is −72 dBm or better and
-          fall back to 2.4 GHz otherwise. The lines on the map use the same band as this card; the band buttons only change
-          the floor colours. Switch boxes on and off here; the <RouterLink to="/sites">Sites</RouterLink> page updates too.
-        </p>
-      </section>
-      <section class="card">
-        <h2>Signal waves</h2>
-        <p class="muted small">Each device sends a wave to the access point it uses. The wave's shape and colour show how strong that signal is.</p>
-        <ul class="linekey key">
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -50)" class="good" /></svg>Good: tight waves, −67 dBm or stronger</li>
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -70)" class="weak" /></svg>Weak: long waves, −67 to −75 dBm</li>
-          <li><svg viewBox="0 0 48 16" aria-hidden="true"><path :d="wave(2, 8, 46, 8, -90)" class="bad" /></svg>Unusable: flat, broken, below −75 dBm</li>
-        </ul>
-        <h2 class="spaced">Signal levels</h2>
-        <p class="muted small">dBm is the received signal power; closer to 0 is stronger, and every 10 dB less is ten times weaker.</p>
-        <ul class="legend">
-          <li v-for="l in LEVELS" :key="l.label">
-            <i :style="{ background: l.color ? `rgb(${l.color.join(',')})` : 'transparent' }" :class="{ empty: !l.color }" />
-            {{ l.label }}
-          </li>
-        </ul>
-      </section>
-      <section class="card">
-        <h2>Access points</h2>
-        <p class="muted small">Switch one off to see what a "mesh point down" test covers.</p>
-        <label v-for="(a, i) in aps" :key="a.name" class="toggle">
-          <input v-model="a.on" type="checkbox" />
-          <i :style="{ background: SERIES[i] }" />
-          {{ a.name }} <span class="muted">{{ a.detail }}</span>
-        </label>
-      </section>
-      <section class="card">
-        <h2>Devices</h2>
-        <ul class="devs">
-          <li v-for="l in links" :key="l.d.name">
-            <b>{{ l.d.name }}</b>{{ " " }}
-            <span v-if="l.hidden" class="muted">walking (see below the plan)</span>
-            <span v-else :class="l.usable ? 'good' : 'badtxt'">{{ l.text }}</span>
-            <div class="muted small">{{ l.d.detail }}</div>
-          </li>
-        </ul>
-      </section>
-    </aside>
-  </div>
 </template>
 
 <style scoped>
-.layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 16px; align-items: start; }
-@media (max-width: 960px) { .layout { grid-template-columns: 1fr; } }
+.layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 16px; align-items: stretch; margin-top: 12px; }
+.side { display: grid; align-content: start; }
+.bottom { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-top: 16px; align-items: start; }
+.layout .card, .bottom > .card { margin: 0; }
+.walkcard { margin-top: 16px; }
+.modeltag { font-size: 12px; font-weight: 600; border: 1px solid var(--skip); background: var(--skip-bg); border-radius: var(--radius-sm); padding: 1px 8px; cursor: help; }
+@media (max-width: 960px) { .layout, .bottom { grid-template-columns: 1fr; } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
 .seglabel { font-size: 14px; color: var(--muted); }
 .segs { display: flex; gap: 4px; }
