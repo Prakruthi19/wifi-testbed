@@ -85,6 +85,23 @@ def test_one_job_at_a_time_and_its_result(lab):
         __import__("time").sleep(0.05)
     view = jobs.view(jobs.jobs[job["id"]])
     assert view["status"] == "passed" and view["log_tail"] == ["hello"]
+    assert view["started"] and view["finished"]
+    assert jobs.current()["id"] == job["id"]  # a page opened later finds the last run
+
+
+def test_current_job_is_empty_before_any_run(lab):
+    assert client(lab).get("/api/jobs/current").json() == {"job": None}
+
+
+def test_progress_is_read_from_pytest_output():
+    lines = [
+        "collected 318 items / 310 deselected / 8 selected",
+        "",
+        "tests/test_failures.py ..s.F",
+    ]
+    assert api._progress(lines) == {"done": 5, "total": 8}
+    assert api._progress(["collected 3 items", "tests/test_a.py ...  [100%]"]) == {"done": 3, "total": 3}
+    assert api._progress([]) == {"done": 0, "total": None}
 
 
 def test_export_writes_the_same_json_as_the_api(lab, tmp_path):

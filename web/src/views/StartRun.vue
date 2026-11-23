@@ -1,39 +1,17 @@
 <script setup lang="ts">
-import { onUnmounted, ref } from 'vue'
-import { api, DEMO, type Job } from '../api'
+import { computed, ref } from 'vue'
+import { DEMO } from '../api'
+import { useJobs } from '../stores/jobs'
 import { useSummary } from '../stores/summary'
 
 const summary = useSummary()
+const jobs = useJobs()
 const suite = ref('failures')
-const job = ref<Job | null>(null)
-const error = ref<string | null>(null)
-let timer: number | undefined
-
-async function start() {
-  error.value = null
-  try {
-    job.value = await api.startRun(suite.value)
-    poll()
-  } catch (e) {
-    error.value = (e as Error).message
-  }
-}
-
-// Ask the API every 2 s how the run is going until it finishes.
-function poll() {
-  timer = window.setTimeout(async () => {
-    if (!job.value) return
-    try {
-      job.value = await api.job(job.value.id)
-    } catch (e) {
-      error.value = (e as Error).message
-      return
-    }
-    if (job.value.status === 'running') poll()
-    else summary.load()
-  }, 2000)
-}
-onUnmounted(() => window.clearTimeout(timer))
+const job = computed(() => jobs.job)
+const pct = computed(() => {
+  const p = job.value?.progress
+  return p?.total ? Math.round((100 * p.done) / p.total) : null
+})
 </script>
 
 <template>
@@ -45,7 +23,7 @@ onUnmounted(() => window.clearTimeout(timer))
     The API is not running as root, so it can only show results. Start it with <code>sudo -E .venv/bin/uvicorn testbed.api:app</code>.
   </p>
 
-  <form class="card form" @submit.prevent="start">
+  <form class="card form" @submit.prevent="jobs.start(suite)">
     <label>Suite
       <select v-model="suite">
         <option v-for="s in summary.data?.startable_suites ?? []" :key="s" :value="s">{{ s }}</option>
@@ -56,9 +34,14 @@ onUnmounted(() => window.clearTimeout(timer))
     </button>
   </form>
 
-  <p v-if="error" class="error">{{ error }}</p>
+  <p v-if="jobs.error" class="error">{{ jobs.error }}</p>
   <section v-if="job" class="card" aria-live="polite">
     <h2>Run {{ job.id }}: {{ job.suite }} <span class="muted">({{ job.status }})</span></h2>
+    <p v-if="job.progress?.total" class="muted">
+      {{ job.progress.done }} of {{ job.progress.total }} tests finished
+      <progress :value="job.progress.done" :max="job.progress.total" :aria-label="`${pct}% of tests finished`" />
+    </p>
+    <p v-if="job.status === 'running'" class="muted">You can leave this page: the run keeps going, and the top bar shows it on every page.</p>
     <pre>{{ job.log_tail.join('\n') || 'Waiting for output…' }}</pre>
     <RouterLink v-if="job.status !== 'running'" to="/runs">See it in Test runs</RouterLink>
   </section>
@@ -67,4 +50,5 @@ onUnmounted(() => window.clearTimeout(timer))
 <style scoped>
 .form { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
 .form label { display: flex; flex-direction: column; gap: 4px; }
+progress { vertical-align: middle; margin-left: 8px; width: 160px; }
 </style>

@@ -3,11 +3,13 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { DEMO, formatTime } from './api'
 import { useSummary } from './stores/summary'
+import { useJobs } from './stores/jobs'
 
 // The dashboard shell: a fixed sidebar (a bottom tab bar on phones), a top bar with the data source
 // and the theme switch, and the page in the remaining space.
 const summary = useSummary()
-onMounted(summary.load)
+const jobs = useJobs()
+onMounted(() => { summary.load(); jobs.resume() })
 const route = useRoute()
 
 const NAV = [
@@ -74,6 +76,10 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
     <div class="main">
       <header class="topbar">
         <span class="crumb"><span class="muted">Wi-Fi Test Lab</span> <span aria-hidden="true">›</span> {{ crumb }}</span>
+        <RouterLink v-if="jobs.running && jobs.job" to="/start" class="chip live" :title="`Run ${jobs.job.id} is running; open it`">
+          <span class="dot" aria-hidden="true"></span>
+          Running: {{ jobs.job.suite }}<template v-if="jobs.job.progress?.total">, {{ jobs.job.progress.done }}/{{ jobs.job.progress.total }}</template>
+        </RouterLink>
         <span v-if="summary.data?.sample" class="chip warn" title="Placeholder data for layout only. These are not results from a real lab run.">Sample data</span>
         <span v-else-if="DEMO" class="chip" :title="`Results saved from an emulated lab (virtual radios in a Linux VM), last run ${formatTime(summary.data?.last_finished ?? null)}`">Read-only demo</span>
         <button type="button" class="iconbtn" :aria-label="THEME_LABEL[theme]" :title="THEME_LABEL[theme]" @click="theme = NEXT[theme]">
@@ -107,6 +113,10 @@ svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; s
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 24px; background: var(--card); border-bottom: 1px solid var(--line); }
 .crumb { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .chip { font-size: 12px; border-radius: 999px; padding: 3px 10px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip.live { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-color: var(--accent); }
+.chip.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
+@keyframes pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) { .chip.live .dot { animation: none; } }
 .chip.warn { color: var(--skip); background: var(--skip-bg); border-color: transparent; }
 .iconbtn { background: none; color: var(--ink); border: 1px solid var(--line); min-height: 36px; width: 36px; padding: 0; display: grid; place-items: center; }
 .iconbtn:hover { background: var(--bg); }
