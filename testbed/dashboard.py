@@ -37,6 +37,8 @@ SUITES = {
     "matrix": ("Connectivity matrix", "security x PMF x channel x client, repeated joins"),
     "qualify": ("AP qualification", "baseline every inventory AP must pass"),
     "vlan": ("VLAN segmentation", "SSIDs on separate VLANs; isolation enforced"),
+    "home": ("Home network", "router + 2 mesh points + 5 device types: joins, roaming help, "
+             "discovery and troubleshooting"),
     "android": ("Android (ADB)", "phone behaviour driven over ADB"),
     "rf": ("Range vs rate", "attenuator sweep; real radios only"),
     "unit": ("Unit tests", "parsers and decision logic, no lab"),

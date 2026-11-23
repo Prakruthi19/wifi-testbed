@@ -61,7 +61,7 @@ test('channel map flags no overlap for the home mesh on 1, 6 and 11', async ({ p
 
 test('results grid: a square opens its run', async ({ page }) => {
   await page.goto('/#/runs')
-  await page.getByRole('tab', { name: /Flaky tests/ }).click()
+  await page.getByRole('tab', { name: 'Test history' }).click()
   const cell = page.getByRole('button', { name: /Device blocked by the router, run 1: failed/ })
   await cell.focus()
   await expect(page.locator('.tip')).toContainText('failed')
