@@ -67,18 +67,43 @@ def _artifacts(nodeid: str, reports_dir: Path) -> tuple[list[str], str | None]:
     return files, stage
 
 
+# Parsed history files, keyed by path. A file is parsed again only if its size or modified time changed,
+# so a request reads the disk once per new run instead of re-parsing every run every time.
+_HISTORY_CACHE: dict[Path, tuple[tuple[int, int], dict]] = {}
+_HISTORY_LOCK = threading.Lock()
+
+
+def _load_history(p: Path) -> dict | None:
+    try:
+        st = p.stat()
+        key = (st.st_mtime_ns, st.st_size)
+        with _HISTORY_LOCK:
+            hit = _HISTORY_CACHE.get(p)
+        if hit and hit[0] == key:
+            return hit[1]
+        run = {**json.loads(p.read_text()), "_file": p.stem}
+    except (OSError, json.JSONDecodeError):
+        return None
+    with _HISTORY_LOCK:
+        _HISTORY_CACHE[p] = (key, run)
+    return run
+
+
+RECENT_RUNS = 20  # how many runs the Test runs page needs in full (sentences and test history)
+
+
 class Data:
-    """Reads the lab's saved files. One instance per request, so new runs show up without a restart."""
+    """Reads the lab's saved files. One instance per request, so new runs show up without a restart;
+    the files themselves come from a cache that only re-reads files that changed."""
 
     def __init__(self, reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inventory.yaml"):
         self.reports_dir = reports_dir
         self.inventory = inventory
         self.runs = []
         for p in sorted((reports_dir / dashboard.HISTORY).glob("*.json")):
-            try:
-                self.runs.append({**json.loads(p.read_text()), "_file": p.stem})
-            except (OSError, json.JSONDecodeError):
-                continue
+            run = _load_history(p)
+            if run is not None:
+                self.runs.append(run)
 
     def summary(self) -> dict:
         tests = dashboard.latest(self.runs)
@@ -105,6 +130,10 @@ class Data:
                 return {"id": run_id, "finished": r["finished"], "counts": _counts(r["results"]),
                         "results": results}
         return None
+
+    def recent(self, n: int = RECENT_RUNS) -> list[dict]:
+        """The newest n runs in full, newest first: one request instead of one per run."""
+        return [self.run(r["id"]) for r in self.run_list()[:max(0, n)]]
 
     def tests(self) -> list[dict]:
         out = []
@@ -205,6 +234,10 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
     def runs():
         return data().run_list()
 
+    @app.get("/api/runs/recent")  # declared before /api/runs/{run_id} so "recent" is not read as an id
+    def recent_runs(n: int = RECENT_RUNS):
+        return data().recent(min(n, 100))
+
     @app.get("/api/runs/{run_id}")
     def run(run_id: str):
         r = data().run(run_id)
@@ -263,6 +296,7 @@ def export(out: Path, reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR
     write("tests.json", d.tests())
     for r in d.run_list():
         write(f"runs/{r['id']}.json", d.run(r["id"]))
+    write("runs/recent.json", d.recent())
     return len(d.runs)
 
 

@@ -90,6 +90,8 @@ export const api = {
   lab: () => get<Lab>('/lab'),
   runs: () => get<RunSummary[]>('/runs'),
   run: (id: string) => get<RunDetail>(`/runs/${encodeURIComponent(id)}`),
+  // The newest runs in full, in one request (the API caps it; the demo has a frozen copy).
+  recentRuns: () => get<RunDetail[]>('/runs/recent'),
   tests: () => get<TestResult[]>('/tests'),
   job: (id: string) => get<Job>(`/jobs/${encodeURIComponent(id)}`),
   // The running job, else the last one; null before any run (and always in the demo, which has no lab).

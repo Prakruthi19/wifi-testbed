@@ -1,21 +1,24 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { api, formatTime, testName, type RunDetail, type TestResult } from '../api'
+import { useRuns } from '../stores/runs'
 import { describe, facts, fileLabel, stepLabel, suiteLabel, variantOf } from '../describe'
 import JoinTimeline from '../components/JoinTimeline.vue'
 import { failedCount, formatDuration, runSentence, testTime, tone } from '../runs'
 
 const props = defineProps<{ id: string }>()
+const store = useRuns()
 const run = ref<RunDetail | null>(null)
 const error = ref<string | null>(null)
 
 watch(
   () => props.id,
   async (id) => {
-    run.value = null
     error.value = null
+    // Shown at once if the Test runs page already loaded it; fetched (and kept) otherwise.
+    run.value = store.details[id] ?? null
     try {
-      run.value = await api.run(id)
+      run.value = await store.run(id)
     } catch (e) {
       error.value = (e as Error).message
     }
@@ -33,10 +36,11 @@ const results = computed(() =>
 
 // Which rows are open: failed and crashed tests start open, so the problem is the first thing seen.
 const openRows = reactive(new Set<string>())
+// immediate: a run from the cache is already set before this watcher exists.
 watch(run, (r) => {
   openRows.clear()
   r?.results.forEach((t) => (t.outcome === 'failed' || t.outcome === 'error') && openRows.add(t.nodeid))
-})
+}, { immediate: true })
 const toggle = (id: string) => (openRows.has(id) ? openRows.delete(id) : openRows.add(id))
 const allOpen = computed(() => results.value.length > 0 && results.value.every(({ r }) => openRows.has(r.nodeid)))
 const toggleAll = () => {
