@@ -13,6 +13,7 @@ testbed/runstore.py), and JSON answers carry an ETag so an unchanged answer cost
 from __future__ import annotations
 
 import argparse
+import asyncio
 import hashlib
 import json
 import os
@@ -27,7 +28,7 @@ from pathlib import Path
 
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 from testbed import LAB_DIR, REPO_ROOT, REPORTS_DIR
@@ -93,6 +94,8 @@ def _load_history(p: Path) -> dict | None:
     return run
 
 
+SSE_CHECK_S = 0.5      # how often the event stream looks at the job's log file (a local stat)
+SSE_KEEPALIVE_S = 15   # a comment line this often keeps idle connections open through proxies
 RECENT_RUNS = 20  # how many runs the Test runs page needs in full (sentences and test history)
 
 
@@ -227,7 +230,7 @@ class StartRun(BaseModel):
 def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inventory.yaml",
                is_root=lambda: os.geteuid() == 0) -> FastAPI:
     app = FastAPI(title="wifi-testbed API")
-    jobs = Jobs(reports_dir / "jobs")
+    jobs = app.state.jobs = Jobs(reports_dir / "jobs")
     data = lambda: Data(reports_dir, inventory)
 
     store = RunStore(reports_dir / "runs.db", reports_dir / dashboard.HISTORY)
@@ -300,6 +303,40 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
     def current_job():
         j = jobs.current()
         return {"job": jobs.view(j) if j else None}
+
+    @app.get("/api/jobs/{job_id}/events")
+    async def job_events(job_id: str, request: Request):
+        """Server-Sent Events: one long-lived response that pushes the job's state whenever it changes,
+        instead of the browser asking every 2 s. Checking for a change is a local stat of the log file
+        (no network); a message goes out only when the log grew or the status changed. A comment line
+        every 15 s keeps proxies from closing a quiet connection. The stream ends with the final state."""
+        job = jobs.jobs.get(job_id)
+        if job is None:
+            raise HTTPException(404, "no such job")
+
+        async def stream():
+            last, quiet = None, 0.0
+            while True:
+                if await request.is_disconnected():
+                    return
+                try:
+                    size = job["_log"].stat().st_size
+                except OSError:
+                    size = -1
+                done = job["status"] != "running"
+                if (job["status"], size) != last:
+                    last, quiet = (job["status"], size), 0.0
+                    yield f"event: job\ndata: {json.dumps(jobs.view(job))}\n\n"
+                elif quiet >= SSE_KEEPALIVE_S:
+                    quiet = 0.0
+                    yield ": keep-alive\n\n"
+                if done:
+                    return
+                await asyncio.sleep(SSE_CHECK_S)
+                quiet += SSE_CHECK_S
+
+        return StreamingResponse(stream(), media_type="text/event-stream",
+                                 headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
     @app.get("/api/jobs/{job_id}")
     def job(job_id: str):

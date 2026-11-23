@@ -170,3 +170,20 @@ def test_the_index_rebuilds_itself_and_drops_deleted_runs(lab):
     assert len(client(lab).get("/api/runs").json()) == 2  # rebuilt from the JSON files
     (lab / "reports" / "history" / "20260927T164700Z.json").unlink()
     assert [r["id"] for r in client(lab).get("/api/runs").json()] == ["20260928T030000Z"]
+
+
+def test_job_events_push_progress_and_end_with_the_final_state(lab):
+    app = api.create_app(lab / "reports", lab / "inventory.yaml", is_root=lambda: True)
+    job = app.state.jobs.start("failures", cmd=[sys.executable, "-c",
+                                                "import time\nfor i in range(3): print('line', i, flush=True); time.sleep(0.3)"])
+    c = TestClient(app)
+    assert c.get("/api/jobs/nope/events").status_code == 404
+    events = []
+    with c.stream("GET", f"/api/jobs/{job['id']}/events") as res:
+        assert res.headers["content-type"].startswith("text/event-stream")
+        for line in res.iter_lines():
+            if line.startswith("data: "):
+                events.append(json.loads(line[6:]))
+    assert len(events) >= 2  # pushed as the log grew, not only at the end
+    assert events[-1]["status"] == "passed" and events[-1]["log_tail"][-1] == "line 2"
+    assert all(e["status"] == "running" for e in events[:-1])
