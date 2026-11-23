@@ -265,6 +265,10 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
     def recent_runs(request: Request, n: int = RECENT_RUNS):
         return cached(request, lambda: [detail(r["id"]) for r in store.list(max(0, min(n, 100)))])
 
+    @app.get("/api/runs/recent")  # declared before /api/runs/{run_id} so "recent" is not read as an id
+    def recent_runs(n: int = RECENT_RUNS):
+        return data().recent(min(n, 100))
+
     @app.get("/api/runs/{run_id}")
     def run(request: Request, run_id: str):
         store.sync()
