@@ -184,17 +184,17 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .about { font-size: 13px; position: relative; }
 .about summary { cursor: pointer; color: var(--accent); list-style: none; }
 .about summary::before { content: 'ⓘ '; }
-.about p { position: absolute; right: 0; z-index: 4; width: min(360px, 80vw); margin: 6px 0 0; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); }
+.about p { position: absolute; right: 0; z-index: 4; width: min(360px, 80vw); margin: 6px 0 0; padding: 12px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); }
 .switch { display: inline-flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; }
 .switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
-.track { width: 36px; height: 20px; border-radius: 999px; background: var(--line); position: relative; transition: background 0.15s; }
+.track { width: 36px; height: 20px; border-radius: var(--radius-sm); background: var(--line); position: relative; transition: background 0.15s; }
 .track span { position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--card); transition: transform 0.15s; box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); }
 .switch input:checked + .track { background: var(--pass); }
 .switch input:checked + .track span { transform: translateX(16px); }
 .switch input:focus-visible + .track { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
-.kpi { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 16px; display: grid; gap: 2px; }
+.kpi { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 16px; display: grid; gap: 2px; }
 .kpi .k { font-size: 12px; color: var(--muted); }
 .kpi b { font-size: 28px; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .kpi small { font-size: 14px; font-weight: 400; color: var(--muted); }
@@ -204,15 +204,15 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 /* One screen: the three panels fill the rest of the window and scroll inside. */
 .dash { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 12px; height: calc(100vh - 250px); min-height: 440px; }
 .rail { display: grid; grid-template-rows: 1fr 1fr; gap: 12px; min-height: 0; }
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; min-height: 0; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 14px 16px; display: flex; flex-direction: column; min-height: 0; }
 .panel h2 { font-size: 15px; margin: 0 0 8px; }
-.count { font-size: 12px; font-weight: 600; background: var(--bg); border-radius: 999px; padding: 1px 8px; margin-left: 4px; }
+.count { font-size: 12px; font-weight: 600; background: var(--bg); border-radius: var(--radius-sm); padding: 1px 8px; margin-left: 4px; }
 .scroller { overflow: auto; min-height: 0; flex: 1; }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
 .toolbar h2 { margin: 0 8px 0 0; }
-.toolbar input[type='search'] { flex: 1; min-width: 160px; min-height: 36px; padding: 6px 10px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-.segs { display: flex; gap: 2px; background: var(--bg); border-radius: 8px; padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 10px; font-size: 13px; border-radius: 6px; }
+.toolbar input[type='search'] { flex: 1; min-width: 160px; min-height: 36px; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
+.segs { display: flex; gap: 2px; background: var(--bg); border-radius: var(--radius); padding: 2px; }
+.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 10px; font-size: 13px; border-radius: var(--radius); }
 .seg[aria-pressed='true'] { background: var(--card); color: var(--ink); font-weight: 600; box-shadow: 0 1px 2px rgb(0 0 0 / 0.12); }
 .livehint { margin: -4px 0 8px; display: flex; align-items: center; gap: 8px; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--pass); animation: pulse 1.6s ease-in-out infinite; flex: none; }
@@ -240,7 +240,7 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .dot.hollow { border: 1.5px dashed var(--fail); }
 .dot.hollow:not(.big) { border-color: var(--muted); }
 .cards { list-style: none; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; }
-.sitecard { display: grid; gap: 6px; padding: 10px; border-radius: 8px; background: var(--bg); border: 1px solid var(--line); border-top: 3px solid var(--pass); color: var(--ink); text-decoration: none; height: 100%; }
+.sitecard { display: grid; gap: 6px; padding: 10px; border-radius: var(--radius); background: var(--bg); border: 1px solid var(--line); border-top: 3px solid var(--pass); color: var(--ink); text-decoration: none; height: 100%; }
 .sitecard.warning { border-top-color: var(--skip); }
 .sitecard.degraded, .sitecard.offline { border-top-color: var(--fail); }
 .sitecard:hover, .sitecard:focus-visible { outline: 2px solid var(--accent); }
@@ -248,7 +248,7 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .sitecard .issue { margin: 0; font-size: 12px; }
 
 .feed { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 13px; }
-.feed li { padding: 6px 8px; border-radius: 6px; border-left: 3px solid var(--skip); background: var(--bg); }
+.feed li { padding: 6px 8px; border-radius: var(--radius); border-left: 3px solid var(--skip); background: var(--bg); }
 .feed li.offline, .feed li.problem { border-left-color: var(--fail); }
 .feed li.clear { border-left-color: var(--pass); }
 .ts { color: var(--muted); font-variant-numeric: tabular-nums; margin-right: 6px; }

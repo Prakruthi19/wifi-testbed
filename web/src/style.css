@@ -6,6 +6,7 @@
   --series-1: #2a78d6; --series-2: #eb6834; --series-3: #1baf7a; --series-4: #6250d6;
   --floor-wood: #f1e6d3; --floor-wood-line: #e3d3b8; --floor-tile: #eceff2; --floor-tile-line: #dde1e6;
   --floor-carpet: #eee9f2; --furniture: #ddd6cb; --furniture-edge: #a99f90; --window: #8fc1ea;
+  --radius: 4px; --radius-sm: 3px; /* square, portal-style corners */
   color-scheme: light dark;
 }
 /* Dark colours: follow the system unless the person picked a theme in the top bar. */
@@ -37,23 +38,23 @@ a { color: var(--accent); }
 h1 { font-size: 22px; margin: 0 0 4px; }
 h2 { font-size: 17px; margin: 0 0 10px; }
 .sub { color: var(--muted); margin: 0 0 20px; }
-.card { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 16px; margin-bottom: 16px; }
+.card { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px; margin-bottom: 16px; }
 .grid { display: grid; gap: 12px; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
 .tiles { display: grid; gap: 10px; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); margin-bottom: 16px; }
-.tile { background: var(--card); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+.tile { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; }
 .tile b { display: block; font-size: 26px; font-variant-numeric: tabular-nums; }
 .tile span { color: var(--muted); font-size: 13px; }
 .muted { color: var(--muted); }
-.error { color: var(--fail); background: var(--fail-bg); padding: 10px 12px; border-radius: 8px; }
+.error { color: var(--fail); background: var(--fail-bg); padding: 10px 12px; border-radius: var(--radius); }
 table { width: 100%; border-collapse: collapse; }
 th, td { text-align: left; padding: 10px 8px; border-top: 1px solid var(--line); vertical-align: top; }
 th { color: var(--muted); font-weight: 500; font-size: 13px; border-top: 0; }
 td.num { font-variant-numeric: tabular-nums; }
 button, select, input { font: inherit; }
-button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; min-height: 40px; }
+button { background: var(--accent); color: var(--accent-ink); border: 0; border-radius: var(--radius); padding: 8px 16px; cursor: pointer; min-height: 40px; }
 button:disabled { opacity: .5; cursor: not-allowed; }
-select { padding: 8px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--ink); min-height: 40px; }
-pre { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 10px; overflow-x: auto; font-size: 12px; }
+select { padding: 8px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--card); color: var(--ink); min-height: 40px; }
+pre { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; overflow-x: auto; font-size: 12px; }
 /* Tables become stacked cards on phones instead of scrolling sideways. */
 @media (max-width: 640px) {
   table.stack thead { display: none; }

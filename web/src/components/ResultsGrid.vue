@@ -98,7 +98,7 @@ const open = (col: number) => router.push({ name: 'run', params: { id: cols.valu
 .head .name { color: var(--muted); font-weight: 400; }
 .name { font-weight: 500; padding-right: 12px; font-size: 13px; white-space: nowrap; }
 .name .muted { margin-left: 6px; font-size: 12px; }
-.flip { margin-left: 6px; font-size: 11px; color: var(--skip); background: var(--skip-bg); border-radius: 999px; padding: 1px 6px; }
+.flip { margin-left: 6px; font-size: 11px; color: var(--skip); background: var(--skip-bg); border-radius: var(--radius-sm); padding: 1px 6px; }
 .cell { width: 24px; height: 24px; min-height: 0; padding: 0; border-radius: 4px; border: 0; display: block; cursor: pointer; }
 .cell.passed { background: var(--pass); }
 .cell.failed, .cell.error { background: var(--fail); }

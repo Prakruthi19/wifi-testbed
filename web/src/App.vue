@@ -100,7 +100,7 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
 .brand { display: flex; align-items: center; gap: 10px; padding: 6px 8px 14px; font-weight: 700; color: var(--ink); text-decoration: none; white-space: nowrap; }
 .brand svg { width: 26px; height: 26px; flex: none; stroke: var(--accent); stroke-width: 2.2; }
 nav { display: grid; gap: 2px; }
-.navitem { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 8px 10px; border-radius: 8px; color: var(--muted); text-decoration: none; white-space: nowrap; font-size: 14px; background: none; border: 0; width: 100%; text-align: left; }
+.navitem { display: flex; align-items: center; gap: 12px; min-height: 40px; padding: 8px 10px; border-radius: var(--radius); color: var(--muted); text-decoration: none; white-space: nowrap; font-size: 14px; background: none; border: 0; width: 100%; text-align: left; }
 .navitem:hover { background: var(--bg); color: var(--ink); }
 .navitem.on { background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--ink); font-weight: 600; }
 .navitem.on svg { stroke: var(--accent); }
@@ -112,7 +112,7 @@ svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; s
 .main { min-width: 0; display: flex; flex-direction: column; }
 .topbar { position: sticky; top: 0; z-index: 5; display: flex; align-items: center; gap: 10px; min-height: 56px; padding: 0 24px; background: var(--card); border-bottom: 1px solid var(--line); }
 .crumb { flex: 1; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.chip { font-size: 12px; border-radius: 999px; padding: 3px 10px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
+.chip { font-size: 12px; border-radius: var(--radius-sm); padding: 3px 10px; background: var(--bg); border: 1px solid var(--line); color: var(--muted); white-space: nowrap; }
 .chip.live { color: var(--ink); text-decoration: none; display: inline-flex; align-items: center; gap: 6px; border-color: var(--accent); }
 .chip.live .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pulse 1.4s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .3; } }
