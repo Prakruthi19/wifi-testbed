@@ -3,7 +3,7 @@ import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { api, formatTime, type RunDetail, type RunSummary } from '../api'
 import { SUITES } from '../describe'
-import { formatDuration, runSentence, testTime, tone, totalCount } from '../runs'
+import { formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
 import { useJobs } from '../stores/jobs'
 import CountsBar from '../components/CountsBar.vue'
 import ResultsGrid from '../components/ResultsGrid.vue'
@@ -16,7 +16,7 @@ const loading = ref(true)
 const error = ref<string | null>(null)
 const suite = ref('')
 const onlyFailing = ref(false)
-const tab = ref<'runs' | 'flaky'>('runs')
+const tab = ref<'runs' | 'history'>('runs')
 const DETAIL_RUNS = 20 // the latest 20 runs are loaded in full, for the sentences and the flaky-tests grid
 
 async function load() {
@@ -41,16 +41,8 @@ const shown = computed(() =>
 )
 const gridRuns = computed(() => shown.value.map((r) => details.value[r.id]).filter(Boolean))
 
-// Tests whose result changed between pass and fail across the loaded runs.
-const flaky = computed(() => {
-  const seen = new Map<string, Set<boolean>>()
-  Object.values(details.value).forEach((d) => d.results.forEach((t) => {
-    if (t.outcome === 'skipped') return
-    if (!seen.has(t.nodeid)) seen.set(t.nodeid, new Set())
-    seen.get(t.nodeid)!.add(t.outcome === 'passed')
-  }))
-  return [...seen.values()].filter((s) => s.size > 1).length
-})
+// Tests that switched between pass and fail across the loaded runs (same rule as the Test history tab).
+const flaky = computed(() => testHistories(Object.values(details.value)).filter((h) => h.changes).length)
 const latest = computed(() => runs.value[0] ?? null)
 const passRate = computed(() => {
   const c = latest.value?.counts
@@ -102,14 +94,14 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     <div class="tile"><span>Runs</span><b>{{ runs.length }}</b></div>
     <div class="tile"><span>Latest run</span><b class="small" :class="latest ? tone(latest.counts) : ''">{{ latest ? runSentence(latest.counts, details[latest.id]?.results) : '—' }}</b></div>
     <div class="tile"><span>Pass rate, latest run</span><b>{{ passRate === null ? '—' : passRate + '%' }}</b></div>
-    <div class="tile"><span>Flaky tests</span><b :class="{ warn: flaky }">{{ flaky }}</b></div>
+    <div class="tile" title="Tests that passed in one run and failed in another. Not all of these are flaky: a known cause, like the lab not being set up, also counts."><span>Changed result</span><b :class="{ warn: flaky }">{{ flaky }}</b></div>
   </div>
 
   <div class="panel">
     <div class="toolbar">
       <div role="tablist" aria-label="Show" class="tabs">
         <button type="button" role="tab" :aria-selected="tab === 'runs'" @click="tab = 'runs'">Runs <span class="count">{{ shown.length }}</span></button>
-        <button type="button" role="tab" :aria-selected="tab === 'flaky'" @click="tab = 'flaky'">Flaky tests <span class="count">{{ flaky }}</span></button>
+        <button type="button" role="tab" :aria-selected="tab === 'history'" @click="tab = 'history'">Test history</button>
       </div>
       <div class="filters">
         <label>Suite
@@ -132,7 +124,7 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
         <tr v-for="r in shown" :key="r.id" :class="tone(r.counts)" @click="open(r.id)">
           <td data-label="Result"><span class="status" :class="tone(r.counts)">{{ tone(r.counts) === 'bad' ? 'Failed' : tone(r.counts) === 'good' ? 'Passed' : 'Skipped' }}</span></td>
           <td data-label="Finished"><RouterLink :to="{ name: 'run', params: { id: r.id } }" @click.stop>{{ formatTime(r.finished) }}</RouterLink></td>
-          <td data-label="Suites" class="hide-sm">{{ r.suites.map((s) => SUITES[s] ?? s).join(', ') }}</td>
+          <td data-label="Suites" class="hide-sm">{{ r.suites.map((s) => (s === 'other' ? 'Other' : SUITES[s] ?? s)).join(', ') }}</td>
           <td data-label="Summary" class="summary">{{ runSentence(r.counts, details[r.id]?.results) }}</td>
           <td data-label="Tests"><div class="tests"><CountsBar :counts="r.counts" /><span class="num">{{ r.counts.passed }}/{{ totalCount(r.counts) }}</span></div></td>
           <td data-label="Test time" class="num hide-sm">{{ details[r.id] ? formatDuration(testTime(details[r.id])) : '—' }}</td>
@@ -141,7 +133,6 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     </table>
 
     <div v-else class="pad">
-      <p class="muted">Every test (down) in every run (across, oldest left). Tests that changed result float to the top.</p>
       <ResultsGrid :runs="gridRuns" />
     </div>
   </div>

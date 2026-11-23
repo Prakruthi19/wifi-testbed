@@ -92,8 +92,30 @@ export function describe(nodeid: string): TestInfo {
     discovery: { title: 'Finding the smart speaker (mDNS)', what: 'The phone looks for the speaker by name on the local network.' },
     matrix: { title: 'Join test', what: 'One security x channel x device combination, joined several times.' },
     qualify_ap: { title: 'Access point qualification step', what: 'One step of the baseline every new access point must pass.' },
+    lease_from_correct_subnet: { title: 'Address from the right network (VLAN)', what: 'A device on this Wi-Fi name must get an IP address from its own VLAN, not another one.' },
+    dns_resolves: { title: 'Name lookup works (VLAN)', what: 'A device on this Wi-Fi name can look up names through its own VLAN gateway.' },
+    iot_cannot_reach_mgmt: { title: 'Smart devices cannot reach the admin network', what: 'The firewall must block the IoT VLAN from the management VLAN.' },
+    mgmt_can_reach_iot: { title: 'Admin network can reach smart devices', what: 'The management VLAN is allowed to reach the IoT VLAN.' },
+    test_ssid_cannot_reach_iot: { title: 'Test network cannot reach smart devices', what: 'The test VLAN must be blocked from the IoT VLAN.' },
+    iot_clients_reach_each_other: { title: 'Smart devices can reach each other', what: 'Two devices on the IoT Wi-Fi can talk to each other while isolation is off.' },
+    iot_client_isolation: { title: 'Client isolation keeps smart devices apart', what: 'With client isolation on, two devices on the IoT Wi-Fi must not reach each other.' },
   }
   return extra[fn] ?? { title: name.replace(/_/g, ' '), what: '' }
+}
+
+// The part of a test id that tells repeated tests apart (pytest's [parameter]), e.g. "lab-wpa3-ch36".
+// Empty when the title already says it (failure cases, enterprise cases, roaming).
+export function variantOf(nodeid: string) {
+  const m = testName(nodeid).match(/^([^[]+)\[(.+)\]$/)
+  if (!m || ['induced_failure', 'enterprise_join', 'roam'].includes(m[1])) return ''
+  return m[2]
+}
+
+// Suite name for a result. Older runs recorded the home-network tests as "other" (the marker was
+// missing from the dashboard's list), so those are recognised by their file.
+export function suiteLabel(suite: string, nodeid: string) {
+  if (suite === 'other' && nodeid.includes('test_home_network')) return SUITES.home
+  return SUITES[suite] ?? suite
 }
 
 // Facts tests record, with plain labels and units. Unlisted facts keep their own name.

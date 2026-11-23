@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, reactive, ref, watch } from 'vue'
 import { api, formatTime, testName, type RunDetail, type TestResult } from '../api'
-import { describe, facts, fileLabel, stepLabel, SUITES } from '../describe'
+import { describe, facts, fileLabel, stepLabel, suiteLabel, variantOf } from '../describe'
 import JoinTimeline from '../components/JoinTimeline.vue'
 import { failedCount, formatDuration, runSentence, testTime, tone } from '../runs'
 
@@ -110,8 +110,9 @@ function verdict(r: TestResult, expectStop?: string) {
                 <button type="button" class="name" :aria-expanded="openRows.has(r.nodeid)" @click.stop="toggle(r.nodeid)">
                   <span class="chev" aria-hidden="true">›</span>{{ info.title }}
                 </button>
+                <code v-if="variantOf(r.nodeid)" class="variant">{{ variantOf(r.nodeid) }}</code>
               </td>
-              <td data-label="Suite" class="muted hide-sm">{{ SUITES[r.suite] ?? r.suite }}</td>
+              <td data-label="Suite" class="muted hide-sm">{{ suiteLabel(r.suite, r.nodeid) }}</td>
               <td data-label="Device stopped at">{{ r.classifier_stage ? stepLabel(r.classifier_stage) : '—' }}</td>
               <td data-label="Time" class="num hide-sm">{{ formatDuration(r.duration_s) }}</td>
             </tr>
@@ -191,6 +192,7 @@ function verdict(r: TestResult, expectStop?: string) {
 .row { cursor: pointer; }
 .row:hover, .row.open { background: var(--bg); }
 .name { background: none; color: var(--ink); padding: 0; min-height: 0; font-weight: 600; text-align: left; display: inline-flex; gap: 8px; align-items: baseline; }
+.variant { margin-left: 6px; font-size: 11px; color: var(--muted); background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 0 5px; }
 .chev { display: inline-block; color: var(--muted); transition: transform .15s; }
 .open .chev { transform: rotate(90deg); }
 .detail td { border-top: 0; padding: 4px 16px 16px 16px; background: var(--bg); }

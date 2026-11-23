@@ -29,3 +29,20 @@ export function formatDuration(s: number) {
   const r = Math.round(s % 60)
   return m < 60 ? `${m} min ${r} s` : `${Math.floor(m / 60)} h ${m % 60} min`
 }
+
+// One test across runs (oldest first). "Changed" counts pass <-> fail switches between runs where it
+// ran; skipped runs are ignored, so a test skipped while the lab was down does not count as a change.
+export interface TestHistory { id: string; suite: string; cells: (TestResult | null)[]; changes: number; failingNow: boolean }
+
+export function testHistories(runs: RunDetail[]): TestHistory[] {
+  const cols = [...runs].sort((a, b) => a.finished.localeCompare(b.finished))
+  const ids = new Map<string, string>()
+  cols.forEach((r) => r.results.forEach((t) => ids.set(t.nodeid, t.suite)))
+  return [...ids].map(([id, suite]) => {
+    const cells = cols.map((r) => r.results.find((t) => t.nodeid === id) ?? null)
+    const ran = cells.filter((c): c is TestResult => !!c && c.outcome !== 'skipped').map((c) => c.outcome === 'passed')
+    const changes = ran.slice(1).filter((ok, i) => ok !== ran[i]).length
+    const last = [...cells].reverse().find(Boolean)
+    return { id, suite, cells, changes, failingNow: last?.outcome === 'failed' || last?.outcome === 'error' }
+  })
+}
