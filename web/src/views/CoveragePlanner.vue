@@ -582,7 +582,7 @@ function nudge(n: Node, e: KeyboardEvent) {
 .check input { width: 18px; height: 18px; }
 .stat { flex: 1; font-size: 14px; }
 .stat b { font-size: 18px; font-variant-numeric: tabular-nums; }
-.stage { position: relative; width: 100%; aspect-ratio: 720 / 480; border-radius: 8px; overflow: hidden; }
+.stage { position: relative; width: 100%; aspect-ratio: 720 / 480; border-radius: var(--radius); overflow: hidden; }
 .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .stage svg { touch-action: none; }
 .yard { fill: var(--bg); }
@@ -648,18 +648,18 @@ function nudge(n: Node, e: KeyboardEvent) {
 .sw { width: 10px; height: 10px; border-radius: 50%; display: inline-block; vertical-align: 0; }
 .walkbody { display: grid; grid-template-columns: minmax(0, 1fr) minmax(240px, 34%); gap: 16px; align-items: start; }
 @media (max-width: 720px) { .walkbody { grid-template-columns: 1fr; } }
-.note { font-size: 13px; margin: 0 0 8px; padding: 8px; border-radius: 6px; background: var(--skip-bg); }
+.note { font-size: 13px; margin: 0 0 8px; padding: 8px; border-radius: var(--radius); background: var(--skip-bg); }
 .log { list-style: none; padding: 0; margin: 0; font-size: 13px; display: grid; gap: 4px; }
-.log li { padding: 4px 8px; border-radius: 6px; background: var(--bg); }
+.log li { padding: 4px 8px; border-radius: var(--radius); background: var(--bg); }
 .log li.roam { background: var(--skip-bg); }
 .log .ts { font-variant-numeric: tabular-nums; color: var(--muted); margin-right: 6px; }
 .spaced { margin-top: 18px; }
 .back { display: inline-block; margin-bottom: 6px; font-size: 14px; }
 .titlerow { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
 .titlerow h1 { margin: 0; }
-.simtag { font-size: 12px; border: 1px dashed var(--muted); color: var(--muted); border-radius: 999px; padding: 1px 8px; }
+.simtag { font-size: 12px; border: 1px dashed var(--muted); color: var(--muted); border-radius: var(--radius-sm); padding: 1px 8px; }
 .issues { list-style: none; padding: 0; margin: 0 0 8px; display: grid; gap: 6px; font-size: 14px; }
-.issues li { padding: 6px 8px; border-radius: 6px; border-left: 4px solid var(--skip); background: var(--skip-bg); }
+.issues li { padding: 6px 8px; border-radius: var(--radius); border-left: 4px solid var(--skip); background: var(--skip-bg); }
 .issues li.problem, .issues li.offline { border-color: var(--fail); background: var(--fail-bg); }
 .legend, .devs { list-style: none; padding: 0; margin: 0; display: grid; gap: 6px; font-size: 14px; }
 .legend i, .toggle i { width: 14px; height: 14px; border-radius: 3px; display: inline-block; vertical-align: -2px; margin-right: 6px; }

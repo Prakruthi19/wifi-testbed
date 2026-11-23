@@ -8,7 +8,7 @@ defineProps<{ outcome: Outcome }>()
 </template>
 
 <style scoped>
-.badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 600; }
+.badge { display: inline-block; padding: 2px 8px; border-radius: var(--radius-sm); font-size: 12px; font-weight: 600; }
 .passed { color: var(--pass); background: var(--pass-bg); }
 .failed, .error { color: var(--fail); background: var(--fail-bg); }
 .skipped { color: var(--skip); background: var(--skip-bg); }

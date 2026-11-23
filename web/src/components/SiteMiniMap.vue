@@ -22,7 +22,7 @@ const DEV: Record<string, string> = { good: 'var(--pass)', weak: 'var(--skip)', 
 </template>
 
 <style scoped>
-svg { width: 100%; height: auto; display: block; border-radius: 6px; background: var(--bg); }
+svg { width: 100%; height: auto; display: block; border-radius: var(--radius); background: var(--bg); }
 .floor { fill: var(--card); }
 .wall { stroke: var(--muted); stroke-width: 7; stroke-linecap: square; }
 .dev { stroke: var(--card); stroke-width: 3; }

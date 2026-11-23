@@ -19,9 +19,11 @@ test('placeholder data is labelled as not real', async ({ page }) => {
 
 test('runs list opens a run with failures first and a join timeline', async ({ page }) => {
   await page.goto('/#/runs')
-  await page.getByRole('button', { name: 'Table' }).click()
-  await page.getByRole('link').filter({ hasText: /2026/ }).last().click()
+  const rows = page.getByRole('table', { name: 'Runs' }).locator('tbody tr')
+  await expect(rows.last()).toContainText('2 failed: Device blocked by the router, Address server switched off')
+  await rows.last().getByRole('link').click()
   await expect(page.getByRole('heading', { level: 1 })).toContainText('Test run of')
+  // Failed tests start open, at the top.
   const first = page.locator('article').first()
   await expect(first.locator('.verdict')).toContainText(/failed|crashed/)
   await expect(page.getByText('stopped here').first()).toBeAttached()
@@ -29,8 +31,7 @@ test('runs list opens a run with failures first and a join timeline', async ({ p
 
 test('filter shows only runs with failures', async ({ page }) => {
   await page.goto('/#/runs')
-  await page.getByRole('button', { name: 'Table' }).click()
-  const rows = page.locator('tbody tr')
+  const rows = page.getByRole('table', { name: 'Runs' }).locator('tbody tr')
   const before = await rows.count()
   await page.getByLabel('Only runs with failures').check()
   await expect(rows).toHaveCount(before - 1)
@@ -60,6 +61,7 @@ test('channel map flags no overlap for the home mesh on 1, 6 and 11', async ({ p
 
 test('results grid: a square opens its run', async ({ page }) => {
   await page.goto('/#/runs')
+  await page.getByRole('tab', { name: /Flaky tests/ }).click()
   const cell = page.getByRole('button', { name: /Device blocked by the router, run 1: failed/ })
   await cell.focus()
   await expect(page.locator('.tip')).toContainText('failed')
@@ -156,11 +158,15 @@ test('dashboard: sidebar collapses, theme switches, and the homes view toggles',
 
 test('run detail explains each test in plain words', async ({ page }) => {
   await page.goto('/#/runs/20260928T030500Z')
-  const card = page.locator('article', { hasText: 'Wrong Wi-Fi password (WPA2)' })
+  await expect(page.getByText('All 7 passed').first()).toBeVisible()
+  // Passed tests start closed; open two rows.
+  await page.getByRole('button', { name: 'Wrong Wi-Fi password (WPA2)' }).click()
+  await page.getByRole('button', { name: 'Fast roaming (802.11r)' }).click()
+  const card = page.getByRole('article', { name: 'Wrong Wi-Fi password (WPA2)' })
   await expect(card.getByText('What it does:')).toBeVisible()
   await expect(card.locator('.verdict')).toContainText('failed on purpose')
   await expect(card.getByText('That is exactly where this broken setup should stop.')).toBeVisible()
-  const roam = page.locator('article', { hasText: 'Fast roaming (802.11r)' })
+  const roam = page.getByRole('article', { name: 'Fast roaming (802.11r)' })
   await expect(roam.getByText('Time to switch access point')).toBeVisible()
   await expect(roam.getByText('56.7 ms')).toBeVisible()
 })

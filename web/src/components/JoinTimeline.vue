@@ -46,13 +46,13 @@ const stopped = computed(() => steps.value.find((s) => s.state === 'fail'))
 
 <style scoped>
 ol { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
-li { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px 4px 4px; border-radius: 999px; border: 1px solid var(--line); cursor: help; }
+li { display: flex; align-items: center; gap: 6px; font-size: 13px; padding: 4px 10px 4px 4px; border-radius: var(--radius-sm); border: 1px solid var(--line); cursor: help; }
 .dot { width: 20px; height: 20px; border-radius: 50%; display: grid; place-items: center; font-size: 11px; font-weight: 700; background: var(--line); color: var(--muted); }
 .ok .dot { background: var(--pass); color: var(--card); }
 .fail { border-color: var(--fail); color: var(--fail); font-weight: 600; }
 .fail .dot { background: var(--fail); color: var(--card); }
 .todo { color: var(--muted); border-style: dashed; }
-.tag { font-size: 11px; font-weight: 600; border-radius: 999px; padding: 0 6px; background: var(--skip-bg); color: var(--skip); }
+.tag { font-size: 11px; font-weight: 600; border-radius: var(--radius-sm); padding: 0 6px; background: var(--skip-bg); color: var(--skip); }
 .note { margin: 8px 0 0; font-size: 14px; }
 .note.ok { color: var(--pass); }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }

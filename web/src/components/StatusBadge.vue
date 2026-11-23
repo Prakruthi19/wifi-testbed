@@ -11,7 +11,7 @@ const ICON: Record<Status, string> = { ok: '✓', warning: '!', degraded: '▲',
 </template>
 
 <style scoped>
-.badge { display: inline-flex; align-items: center; gap: 4px; border-radius: 999px; padding: 2px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.badge { display: inline-flex; align-items: center; gap: 4px; border-radius: var(--radius-sm); padding: 2px 10px; font-size: 13px; font-weight: 600; white-space: nowrap; }
 .ok { color: var(--pass); background: var(--pass-bg); }
 .warning { color: var(--skip); background: var(--skip-bg); }
 .degraded, .offline { color: var(--fail); background: var(--fail-bg); }
