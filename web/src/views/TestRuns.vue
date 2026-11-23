@@ -2,7 +2,8 @@
 import InfoTip from '../components/InfoTip.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { api, formatTime, type RunDetail, type RunSummary } from '../api'
+import { formatTime } from '../api'
+import { useRuns } from '../stores/runs'
 import { SUITES } from '../describe'
 import { formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
 import { useJobs } from '../stores/jobs'
@@ -11,39 +12,28 @@ import ResultsGrid from '../components/ResultsGrid.vue'
 
 const router = useRouter()
 const jobs = useJobs()
-const runs = ref<RunSummary[]>([])
-const details = ref<Record<string, RunDetail>>({})
-const loading = ref(true)
-const error = ref<string | null>(null)
+const store = useRuns()
+const runs = computed(() => store.runs)
+const details = computed(() => store.details)
+const loading = computed(() => store.loading)
+const error = computed(() => store.error)
 const suite = ref('')
 const onlyFailing = ref(false)
 const tab = ref<'runs' | 'history'>('runs')
-const DETAIL_RUNS = 20 // the latest 20 runs are loaded in full, for the sentences and the flaky-tests grid
-
-async function load() {
-  try {
-    runs.value = await api.runs()
-    const ds = await Promise.all(runs.value.slice(0, DETAIL_RUNS).map((r) => api.run(r.id)))
-    details.value = Object.fromEntries(ds.map((d) => [d.id, d]))
-    error.value = null
-  } catch (e) {
-    error.value = (e as Error).message
-  } finally {
-    loading.value = false
-  }
-}
-onMounted(load)
+const load = (force = false) => store.load(force)
+onMounted(() => load())
 // When the live run finishes, its results land in the list without a reload.
-watch(() => jobs.running, (now, before) => { if (before && !now) load() })
+watch(() => jobs.running, (now, before) => { if (before && !now) load(true) })
 
 const suites = computed(() => [...new Set(runs.value.flatMap((r) => r.suites))].sort())
 const shown = computed(() =>
   runs.value.filter((r) => (!suite.value || r.suites.includes(suite.value)) && (!onlyFailing.value || r.counts.failed + r.counts.error > 0)),
 )
-const gridRuns = computed(() => shown.value.map((r) => details.value[r.id]).filter(Boolean))
+const gridRuns = computed(() => shown.value.slice(0, 20).map((r) => details.value[r.id]).filter(Boolean))
 
 // Tests that switched between pass and fail across the loaded runs (same rule as the Test history tab).
-const flaky = computed(() => testHistories(Object.values(details.value)).filter((h) => h.changes).length)
+const recentDetails = computed(() => runs.value.slice(0, 20).map((r) => details.value[r.id]).filter(Boolean))
+const flaky = computed(() => testHistories(recentDetails.value).filter((h) => h.changes).length)
 const latest = computed(() => runs.value[0] ?? null)
 const passRate = computed(() => {
   const c = latest.value?.counts

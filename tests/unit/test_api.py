@@ -109,4 +109,30 @@ def test_export_writes_the_same_json_as_the_api(lab, tmp_path):
     assert api.export(out, lab / "reports", lab / "inventory.yaml") == 2
     assert json.loads((out / "runs.json").read_text())[0]["id"] == "20260928T030000Z"
     assert (out / "runs" / "20260927T164700Z.json").exists()
+    assert [r["id"] for r in json.loads((out / "runs" / "recent.json").read_text())] == ["20260928T030000Z", "20260927T164700Z"]
     assert "secret123" not in (out / "lab.json").read_text()
+
+
+def test_recent_runs_in_one_request_newest_first(lab):
+    c = client(lab)
+    recent = c.get("/api/runs/recent").json()
+    assert [r["id"] for r in recent] == ["20260928T030000Z", "20260927T164700Z"]
+    assert recent[1]["results"][0]["outcome"] == "failed"
+    assert [r["id"] for r in c.get("/api/runs/recent?n=1").json()] == ["20260928T030000Z"]
+
+
+def test_history_files_are_parsed_once_until_they_change(lab, monkeypatch):
+    c = client(lab)
+    c.get("/api/runs")
+    reads = []
+    real = api.Path.read_text
+    monkeypatch.setattr(api.Path, "read_text", lambda self, *a, **k: (reads.append(self.name), real(self, *a, **k))[1])
+    c.get("/api/runs")
+    assert reads == []  # nothing changed, nothing re-read
+    hist = lab / "reports" / "history"
+    (hist / "20260929T010000Z.json").write_text(json.dumps({
+        "finished": "2026-09-29T01:00:00+00:00",
+        "results": [{"nodeid": NODE, "suite": "failures", "outcome": "passed", "duration_s": 1,
+                     "message": "", "properties": {}}]}))
+    assert c.get("/api/runs").json()[0]["id"] == "20260929T010000Z"  # a new run shows up without a restart
+    assert reads == ["20260929T010000Z.json"]  # and only the new file was read

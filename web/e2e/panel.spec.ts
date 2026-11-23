@@ -173,3 +173,18 @@ test('run detail explains each test in plain words', async ({ page }) => {
   await expect(roam.getByText('Time to switch access point')).toBeVisible()
   await expect(roam.getByText('56.7 ms')).toBeVisible()
 })
+
+test('going back to Test runs reuses the loaded runs instead of fetching them again', async ({ page }) => {
+  const asked: string[] = []
+  page.on('request', (r) => { if (/demo\/runs/.test(r.url())) asked.push(r.url()) })
+  await page.goto('/#/runs')
+  await expect(page.getByRole('table', { name: 'Runs' }).locator('tbody tr').first()).toBeVisible()
+  const first = asked.length
+  expect(first).toBe(2) // the list and the recent runs in full, not one request per run
+  await page.getByRole('link', { name: 'Sites' }).first().click()
+  await page.getByRole('link', { name: 'Test runs' }).first().click()
+  await expect(page.getByRole('table', { name: 'Runs' }).locator('tbody tr').first()).toBeVisible()
+  await page.getByRole('table', { name: 'Runs' }).locator('tbody tr').first().click()
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Test run of')
+  expect(asked.length).toBe(first)
+})
