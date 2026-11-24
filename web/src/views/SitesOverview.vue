@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SegmentedControl } from '../components/ui'
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SiteMiniMap from '../components/SiteMiniMap.vue'
@@ -86,13 +87,8 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
       <div class="toolbar">
         <h2 id="homes-h">Homes</h2>
         <input v-model="q" type="search" placeholder="Search name or city" aria-label="Search sites" />
-        <div role="group" aria-label="Show" class="segs">
-          <button v-for="f in FILTERS" :key="f.key" type="button" class="seg" :aria-pressed="filter === f.key" @click="filter = f.key">{{ f.label }}</button>
-        </div>
-        <div role="group" aria-label="View" class="segs">
-          <button type="button" class="seg" :aria-pressed="view === 'table'" @click="view = 'table'">Table</button>
-          <button type="button" class="seg" :aria-pressed="view === 'cards'" @click="view = 'cards'">Cards</button>
-        </div>
+        <SegmentedControl v-model="filter" label="Show" :options="FILTERS.map((f) => ({ value: f.key, label: f.label }))" />
+        <SegmentedControl v-model="view" label="View" :options="[{ value: 'table', label: 'Table' }, { value: 'cards', label: 'Cards' }]" />
       </div>
       <p v-if="store.live" class="livehint muted small" aria-live="polite">
         <span class="pulse" aria-hidden="true" /> Every 3 seconds something changes in one simulated home.
@@ -211,9 +207,6 @@ const open = (id: string) => router.push({ name: 'site', params: { id } })
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; margin-bottom: 10px; }
 .toolbar h2 { margin: 0 8px 0 0; }
 .toolbar input[type='search'] { flex: 1; min-width: 160px; min-height: 36px; padding: 6px 10px; border-radius: var(--radius); border: 1px solid var(--line); background: var(--bg); color: var(--ink); }
-.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
-.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 .livehint { margin: -4px 0 8px; display: flex; align-items: center; gap: 8px; }
 .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--pass); animation: pulse 1.6s ease-in-out infinite; flex: none; }
 @keyframes pulse { 50% { opacity: 0.25; } }

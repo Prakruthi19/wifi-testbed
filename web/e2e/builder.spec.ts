@@ -53,8 +53,8 @@ test('a 2.4 GHz-only model turns off the 5 GHz choices', async ({ page }) => {
   await next(page, 'Access points').click()
   await add(page).click()
   await page.getByText('Compact', { exact: true }).click()
-  await expect(page.getByRole('radio', { name: '5 GHz', exact: true })).toBeDisabled()
-  await expect(page.getByRole('radio', { name: '2.4 GHz', exact: true })).toHaveAttribute('aria-checked', 'true')
+  await expect(page.getByRole('radiogroup', { name: 'Band', exact: true }).getByRole('radio', { name: '5 GHz', exact: true })).toBeDisabled()
+  await expect(page.getByRole('radiogroup', { name: 'Band', exact: true }).getByRole('radio', { name: '2.4 GHz', exact: true })).toHaveAttribute('aria-checked', 'true')
   await expect(page.getByText('5 GHz channel')).toHaveCount(0)
 })
 

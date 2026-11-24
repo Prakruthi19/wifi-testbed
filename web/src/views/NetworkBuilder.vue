@@ -4,6 +4,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InfoTip from '../components/InfoTip.vue'
+import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
 import { useBuilder } from '../stores/builder'
 import { BAND_MODEL, H, LEVELS, W, levelOf, type Band } from '../rfmodel'
 import {
@@ -160,10 +161,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 
 <template>
   <div class="head">
-    <h1>Network builder <span class="modeltag" title="Signal is estimated with a textbook indoor path-loss model; access point models are made up.">Model, not a measurement</span></h1>
+    <h1>Network builder <ModelTag title="Signal is estimated with a textbook indoor path-loss model; access point models are made up." /></h1>
     <div class="tools">
-      <button type="button" class="tool" :disabled="!b.canUndo" title="Undo (Ctrl+Z)" @click="b.undo()">Undo</button>
-      <button type="button" class="tool" :disabled="!b.canRedo" title="Redo (Ctrl+Shift+Z)" @click="b.redo()">Redo</button>
+      <BaseButton variant="secondary" size="sm" :disabled="!b.canUndo" title="Undo (Ctrl+Z)" @click="b.undo()">Undo</BaseButton>
+      <BaseButton variant="secondary" size="sm" :disabled="!b.canRedo" title="Redo (Ctrl+Shift+Z)" @click="b.redo()">Redo</BaseButton>
     </div>
   </div>
   <p v-if="linkError" class="error" role="alert">That plan link is damaged, so a new plan was started.</p>
@@ -180,9 +181,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
     <section class="card planbox" aria-label="Floor plan">
       <div class="planhead">
         <b>{{ home.name }}</b><span class="muted small">{{ home.size }}</span>
-        <div v-if="showHeat" class="segs" role="group" aria-label="Signal band">
-          <button v-for="x in (['2.4', '5'] as Band[])" :key="x" type="button" class="seg" :aria-pressed="band === x" :disabled="!hasBand(x)" @click="band = x">{{ BAND_MODEL[x].label }}</button>
-        </div>
+        <SegmentedControl v-if="showHeat" v-model="band" class="bandpick" label="Signal band" :options="(['2.4', '5'] as Band[]).map((x) => ({ value: x, label: BAND_MODEL[x].label, disabled: !hasBand(x) }))" />
       </div>
       <div class="stage">
         <svg :viewBox="`0 0 ${W} ${H}`" aria-hidden="true" class="floor">
@@ -264,13 +263,11 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
             </fieldset>
             <fieldset class="field">
               <legend>Band</legend>
-              <div class="segs" role="radiogroup" :aria-describedby="errs(ap).band ? `${ap.id}-band-err` : undefined">
-                <button
-                  v-for="c in bandChoices" :key="c.v" type="button" role="radio" class="seg" :aria-checked="ap.band === c.v"
-                  :disabled="c.v !== '2.4' && !modelHas5(ap.model)" :title="c.v !== '2.4' && !modelHas5(ap.model) ? `${MODELS[ap.model].name} has no 5 GHz radio` : undefined"
-                  @click="b.updateAp(ap.id, { band: c.v })"
-                >{{ c.label }}</button>
-              </div>
+              <SegmentedControl
+                :model-value="ap.band" label="Band" :aria-describedby="errs(ap).band ? `${ap.id}-band-err` : undefined"
+                :options="bandChoices.map((c) => ({ value: c.v, label: c.label, disabled: c.v !== '2.4' && !modelHas5(ap.model) }))"
+                @update:model-value="(v) => b.updateAp(ap.id, { band: v })"
+              />
               <small v-if="errs(ap).band" :id="`${ap.id}-band-err`" class="fielderr">{{ errs(ap).band }}</small>
             </fieldset>
             <div class="chans">
@@ -282,7 +279,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
                 </select>
               </label>
             </div>
-            <button type="button" class="remove" @click="b.removeAp(ap.id)">Remove {{ ap.name || 'this access point' }}</button>
+            <BaseButton variant="danger" size="sm" class="remove" @click="b.removeAp(ap.id)">Remove {{ ap.name || 'this access point' }}</BaseButton>
           </div>
         </div>
         <button type="button" class="add" :disabled="b.plan.aps.length >= MAX_APS" @click="b.addAp()">
@@ -334,23 +331,20 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
           <div class="share"><input id="share" :value="shareUrl" readonly @focus="($event.target as HTMLInputElement).select()" /><button type="button" @click="copyLink()">{{ copied ? 'Copied' : 'Copy' }}</button></div>
         </label>
         <p class="sr" aria-live="polite">{{ copied ? 'Link copied' : '' }}</p>
-        <button type="button" class="remove" @click="b.reset()">Start a new plan</button>
+        <BaseButton variant="danger" size="sm" class="remove" @click="b.reset()">Start a new plan</BaseButton>
       </template>
     </aside>
   </div>
 
   <div class="footer">
-    <button type="button" class="tool" :disabled="b.step === 1" @click="goTo(b.step - 1)">Back</button>
-    <button v-if="b.step < 4" type="button" @click="goTo(b.step + 1)">Next: {{ STEPS[b.step] }}</button>
+    <BaseButton variant="secondary" :disabled="b.step === 1" @click="goTo(b.step - 1)">Back</BaseButton>
+    <BaseButton v-if="b.step < 4" @click="goTo(b.step + 1)">Next: {{ STEPS[b.step] }}</BaseButton>
   </div>
 </template>
 
 <style scoped>
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.modeltag { font-size: 12px; font-weight: 600; border: 1px solid var(--skip); background: var(--skip-bg); border-radius: var(--radius-sm); padding: 1px 8px; cursor: help; letter-spacing: 0; }
 .tools { display: flex; gap: 6px; }
-.tool { background: var(--card); color: var(--ink); border: 1px solid var(--line); min-height: 34px; padding: 4px 12px; font-size: 13px; }
-.tool:hover:not(:disabled) { background: var(--hover); color: var(--accent); border-color: var(--accent); }
 .error { color: var(--fail); background: var(--fail-bg); padding: 8px 12px; border-radius: var(--radius); }
 
 .stepper { display: flex; gap: 8px; list-style: none; padding: 0; margin: 12px 0 16px; counter-reset: s; }
@@ -366,11 +360,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 .layout { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
 .planbox { padding: 14px; }
 .planhead { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; flex-wrap: wrap; }
-.planhead .segs { margin-left: auto; }
-.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 30px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
-.seg[aria-pressed='true'], .seg[aria-checked='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
-.seg:disabled { opacity: .4; }
+.planhead .bandpick { margin-left: auto; }
+.remove { justify-self: start; margin-top: 8px; }
 .stage { position: relative; width: 100%; aspect-ratio: 720 / 480; border-radius: var(--radius); overflow: hidden; }
 .stage canvas, .stage svg { position: absolute; inset: 0; width: 100%; height: 100%; }
 .stage svg { touch-action: none; }
@@ -418,8 +409,6 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 .choice.on { border-color: var(--accent); background: var(--accent-soft); }
 .choice input { grid-row: span 2; accent-color: var(--accent); }
 .chans { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
-.remove { background: none; color: var(--fail); border: 1px solid var(--line); min-height: 34px; padding: 4px 12px; font-size: 13px; justify-self: start; margin-top: 8px; }
-.remove:hover { background: var(--fail-bg); border-color: var(--fail); }
 .add { width: 100%; background: var(--card); color: var(--accent); border: 1px dashed var(--accent); margin-top: 4px; }
 .add:hover:not(:disabled) { background: var(--hover); }
 

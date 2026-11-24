@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton } from '../components/ui'
 import { computed, reactive, ref, watch } from 'vue'
 import { api, formatTime, testName, type RunDetail, type TestResult } from '../api'
 import { useRuns } from '../stores/runs'
@@ -100,7 +101,7 @@ function verdict(r: TestResult, expectStop?: string) {
             <span class="count">{{ k === 'all' ? run.results.length : k === 'failed' ? failedCount(run.counts) : run.counts[k] }}</span>
           </button>
         </div>
-        <button type="button" class="ghost" @click="toggleAll">{{ allOpen ? 'Collapse all' : 'Expand all' }}</button>
+        <BaseButton variant="secondary" size="sm" class="ghost" @click="toggleAll">{{ allOpen ? 'Collapse all' : 'Expand all' }}</BaseButton>
       </div>
 
       <p v-if="!visible.length" class="muted pad">No tests with this result.</p>
@@ -188,7 +189,6 @@ function verdict(r: TestResult, expectStop?: string) {
 .tabs button { background: none; color: var(--muted); border-radius: 0; padding: 14px 10px 12px; border-bottom: 2px solid transparent; font-weight: 600; min-height: 0; }
 .tabs button[aria-pressed='true'] { color: var(--ink); border-bottom-color: var(--accent); }
 .count { display: inline-block; min-width: 20px; margin-left: 4px; padding: 0 6px; font-size: 12px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); color: var(--muted); }
-.ghost { background: none; color: var(--accent); border: 1px solid var(--line); min-height: 32px; padding: 4px 10px; font-size: 14px; }
 .pad { padding: 16px; margin: 0; }
 
 .tests th { white-space: nowrap; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }

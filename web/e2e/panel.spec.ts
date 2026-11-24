@@ -75,7 +75,7 @@ test('results grid: a square opens its run', async ({ page }) => {
 test('coverage planner: on 5 GHz the router alone covers less than with both mesh points', async ({ page }) => {
   await page.goto('/#/coverage')
   await expect(page.getByText('This is a model, not a measurement')).toBeVisible()
-  await page.getByRole('button', { name: '5 GHz' }).click()
+  await page.getByRole('radio', { name: '5 GHz' }).click()
   const stat = page.locator('.stat b')
   const withMesh = parseInt((await stat.textContent())!)
   await page.getByRole('checkbox', { name: /mesh-living/ }).uncheck()
@@ -94,8 +94,8 @@ test('coverage planner: keyboard can move the router', async ({ page }) => {
 
 test('coverage planner: walking the phone on 5 GHz roams to a mesh point', async ({ page }) => {
   await page.goto('/#/coverage')
-  await page.getByRole('button', { name: '5 GHz' }).click()
-  await page.getByRole('button', { name: '10×' }).click()
+  await page.getByRole('radio', { name: '5 GHz' }).click()
+  await page.getByRole('radio', { name: '10×' }).click()
   await page.getByRole('button', { name: /Walk the phone/ }).click()
   const log = page.getByRole('list', { name: /What happened on the walk/ })
   await expect(log).toContainText('joined router')
@@ -112,7 +112,7 @@ test('sites portal: lists every home, worst first, and says which are simulated'
   await expect(cards).toHaveCount(8)
   await expect(cards.first()).toContainText('Offline')
   await expect(cards.filter({ hasText: 'Lab home' })).toContainText('Healthy')
-  await page.getByRole('button', { name: 'Offline', exact: true }).click()
+  await page.getByRole('radio', { name: 'Offline', exact: true }).click()
   await expect(cards).toHaveCount(1)
   await expect(cards.first()).toContainText('31 Riverside Drive')
 })
@@ -133,7 +133,7 @@ test('floor plan lines agree with the Health card whatever floor band is shown',
   await page.goto('/#/sites/harbor-4b')
   await expect(page.locator('.issues')).toContainText('laptop has a weak signal')
   for (const band of ['2.4 GHz', '5 GHz']) {
-    await page.getByRole('button', { name: band, exact: true }).click()
+    await page.getByRole('radio', { name: band, exact: true }).click()
     await expect(page.locator('g.device[aria-label^="laptop:"]')).toHaveAttribute('aria-label', /laptop: -\d+ dBm on 5 GHz via router/)
     await expect(page.locator('path.link.weak')).toHaveCount(3)
   }
@@ -141,9 +141,9 @@ test('floor plan lines agree with the Health card whatever floor band is shown',
 
 test('dashboard: sidebar collapses, theme switches, and the homes view toggles', async ({ page, isMobile }) => {
   await page.goto('/#/sites')
-  await page.getByRole('button', { name: 'Table', exact: true }).click()
+  await page.getByRole('radio', { name: 'Table', exact: true }).click()
   await expect(page.getByRole('table', { name: 'Homes' })).toBeVisible()
-  await page.getByRole('button', { name: 'Cards', exact: true }).click()
+  await page.getByRole('radio', { name: 'Cards', exact: true }).click()
   await expect(page.getByRole('list', { name: 'Homes' })).toBeVisible()
   await expect(homes(page)).toHaveCount(8)
   await page.getByRole('button', { name: 'Theme: match system' }).click()

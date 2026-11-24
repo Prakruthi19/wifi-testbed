@@ -1,7 +1,8 @@
-<script setup lang="ts" generic="T extends string">
+<script setup lang="ts" generic="T extends string | number">
 // A row of mutually exclusive choices (a radio group that looks like tabs). Arrow keys move the choice,
 // as in a native radio group; only the chosen option is in the Tab order.
-const props = defineProps<{ options: { value: T; label: string; disabled?: boolean }[]; label: string }>()
+// label names the group for screen readers; or pass labelledby with the id of a visible label instead.
+const props = defineProps<{ options: { value: T; label: string; disabled?: boolean }[]; label?: string; labelledby?: string }>()
 const model = defineModel<T>({ required: true })
 
 function key(e: KeyboardEvent, i: number) {
@@ -21,12 +22,15 @@ function key(e: KeyboardEvent, i: number) {
 </script>
 
 <template>
-  <div class="segs" role="radiogroup" :aria-label="label">
+  <div class="segs" role="radiogroup" :aria-label="labelledby ? undefined : label" :aria-labelledby="labelledby">
     <button
       v-for="(o, i) in options" :key="o.value" type="button" role="radio" class="seg"
       :aria-checked="model === o.value" :tabindex="model === o.value ? 0 : -1" :disabled="o.disabled"
       @click="model = o.value" @keydown="key($event, i)"
-    >{{ o.label }}</button>
+    >
+      <!-- The option slot lets a caller add to the label, for example a count. -->
+      <slot name="option" :option="o">{{ o.label }}</slot>
+    </button>
   </div>
 </template>
 
