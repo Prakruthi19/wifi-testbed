@@ -63,6 +63,24 @@ export const useRuns = defineStore('runs', () => {
     }
   }
 
+  // Make sure at least `count` runs are loaded (jumping to page 7 needs the first 70), in one request.
+  async function loadUntil(count: number) {
+    const last = runs.value[runs.value.length - 1]
+    const need = count - runs.value.length
+    if (!last || need <= 0 || !hasMore.value || loadingMore.value) return
+    loadingMore.value = true
+    try {
+      const page = await api.runsPage(need, last.id)
+      runs.value = [...runs.value, ...page.filter((r) => !runs.value.some((x) => x.id === r.id))]
+      hasMore.value = page.length === need
+      error.value = null
+    } catch (e) {
+      error.value = (e as Error).message
+    } finally {
+      loadingMore.value = false
+    }
+  }
+
   // One run in full: from memory when we have it, otherwise fetched once and kept.
   async function run(id: string): Promise<RunDetail> {
     const hit = details.value[id]
@@ -72,5 +90,5 @@ export const useRuns = defineStore('runs', () => {
     return d
   }
 
-  return { runs, details, loadedAt, loading, refreshing, error, hasMore, loadingMore, load, loadMore, run }
+  return { runs, details, loadedAt, loading, refreshing, error, hasMore, loadingMore, load, loadMore, loadUntil, run }
 })
