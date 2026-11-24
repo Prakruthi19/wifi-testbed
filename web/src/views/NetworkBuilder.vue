@@ -6,10 +6,11 @@ import { useRoute, useRouter } from 'vue-router'
 import InfoTip from '../components/InfoTip.vue'
 import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
 import { useBuilder } from '../stores/builder'
+import { ApiError, DEMO, api, formatTime, type SavedPlan } from '../api'
 import { BAND_MODEL, H, LEVELS, W, levelOf, type Band } from '../rfmodel'
 import {
   CHANNELS, HOMES, MAX_APS, MODELS, NAME_MAX, bandsOf, bestAt, channelOf, decodePlan, encodePlan, fieldErrors, planFromFile, planToFile,
-  homeOf, planValid, roomCoverage, warnings, type BandChoice, type ModelId, type PlanAp,
+  homeOf, planValid, roomCoverage, warnings, type BandChoice, type HomeId, type ModelId, type PlanAp,
 } from '../builder'
 
 const b = useBuilder()
@@ -46,8 +47,62 @@ async function upload(e: Event) {
   const r = planFromFile(await file.text())
   if ('error' in r) { notice.value = { kind: 'error', text: r.error }; return }
   b.load(r.plan)
+  b.savedAs = null
   b.step = 3
   notice.value = { kind: 'ok', text: `Loaded ${file.name}.${r.note ? ' ' + r.note : ''}` }
+}
+
+// Saved plans: kept by name in the lab API's SQLite database (reports/plans.db).
+// The demo site has no API, so there only Download and Upload work.
+const saved = ref<SavedPlan[]>([])
+const savedError = ref('')
+const confirmDelete = ref<number | null>(null)
+async function loadSaved() {
+  if (DEMO) return
+  try { saved.value = await api.plans.list(); savedError.value = '' } catch (e) { savedError.value = (e as Error).message }
+}
+onMounted(loadSaved)
+async function openSaved(s: SavedPlan) {
+  try {
+    const full = await api.plans.get(s.id)
+    const r = planFromFile(JSON.stringify(full.plan))
+    if ('error' in r) { notice.value = { kind: 'error', text: r.error }; return }
+    b.load(r.plan)
+    b.savedAs = full.name
+    b.step = 3
+    notice.value = { kind: 'ok', text: `Opened “${full.name}”.${r.note ? ' ' + r.note : ''}` }
+  } catch (e) { notice.value = { kind: 'error', text: (e as Error).message } }
+}
+async function deleteSaved(s: SavedPlan) {
+  confirmDelete.value = null
+  try {
+    await api.plans.remove(s.id)
+    saved.value = saved.value.filter((x) => x.id !== s.id)
+    if (b.savedAs?.toLowerCase() === s.name.toLowerCase()) b.savedAs = null
+    notice.value = { kind: 'ok', text: `Deleted “${s.name}”.` }
+  } catch (e) { notice.value = { kind: 'error', text: (e as Error).message } }
+}
+
+const planName = ref('')
+const saving = ref(false)
+const nameTaken = ref(false) // the server said this name exists: ask before replacing
+const saveError = ref('')
+watch(() => b.step, (s) => { if (s === 4) { planName.value = b.savedAs ?? homeOf(b.plan.home).name; nameTaken.value = false; saveError.value = '' } }, { immediate: true })
+watch(planName, () => { nameTaken.value = false; saveError.value = '' })
+async function save(replace = false) {
+  const name = planName.value.trim()
+  if (!name) { saveError.value = 'Give the plan a name.'; return }
+  saving.value = true
+  try {
+    const s = await api.plans.save(name, JSON.parse(planToFile(b.plan)), replace)
+    b.savedAs = s.name
+    nameTaken.value = false
+    notice.value = { kind: 'ok', text: `Saved as “${s.name}”.` }
+    loadSaved()
+  } catch (e) {
+    if (e instanceof ApiError && e.status === 409) nameTaken.value = true
+    else saveError.value = (e as Error).message
+  } finally { saving.value = false }
 }
 
 const STEPS = ['Home', 'Access points', 'Check', 'Review']
@@ -255,6 +310,23 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
             <span><b>{{ h.name }}</b><span class="muted small">{{ h.size }}</span></span>
           </button>
         </div>
+        <h2 class="savedhead">Saved plans</h2>
+        <p v-if="DEMO" class="muted small">Saving by name needs the lab API, so it works when you run the app in the VM. Here, use Download and Upload.</p>
+        <p v-else-if="savedError" class="error small" role="alert">Could not load saved plans: {{ savedError }}</p>
+        <p v-else-if="!saved.length" class="muted small">No saved plans yet. Save one on the Review step.</p>
+        <ul v-else class="saved" aria-label="Saved plans">
+          <li v-for="s in saved" :key="s.id">
+            <span class="savedname"><b>{{ s.name }}</b><span class="muted small">{{ homeOf(s.home as HomeId).name }} · {{ s.aps }} AP{{ s.aps === 1 ? '' : 's' }} · {{ formatTime(s.updated) }}</span></span>
+            <template v-if="confirmDelete === s.id">
+              <BaseButton variant="danger" size="sm" :aria-label="`Confirm delete ${s.name}`" @click="deleteSaved(s)">Delete</BaseButton>
+              <BaseButton variant="ghost" size="sm" @click="confirmDelete = null">Keep</BaseButton>
+            </template>
+            <template v-else>
+              <BaseButton variant="secondary" size="sm" :aria-label="`Open ${s.name}`" @click="openSaved(s)">Open</BaseButton>
+              <BaseButton variant="ghost" size="sm" :aria-label="`Delete ${s.name}`" @click="confirmDelete = s.id">Delete</BaseButton>
+            </template>
+          </li>
+        </ul>
       </template>
 
       <!-- Step 2: access points -->
@@ -358,7 +430,20 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
           <div class="share"><input id="share" :value="shareUrl" readonly @focus="($event.target as HTMLInputElement).select()" /><button type="button" @click="copyLink()">{{ copied ? 'Copied' : 'Copy' }}</button></div>
         </label>
         <p class="sr" aria-live="polite">{{ copied ? 'Link copied' : '' }}</p>
-        <BaseButton variant="danger" size="sm" class="remove" @click="b.reset()">Start a new plan</BaseButton>
+        <form v-if="!DEMO" class="field savebox" @submit.prevent="save()">
+          <label for="plan-name">Save as</label>
+          <div class="share">
+            <input id="plan-name" v-model="planName" maxlength="60" autocomplete="off" :aria-invalid="!!saveError" :aria-describedby="saveError ? 'plan-name-err' : undefined" />
+            <BaseButton type="submit" size="sm" :disabled="saving">{{ saving ? 'Saving…' : 'Save' }}</BaseButton>
+          </div>
+          <p v-if="saveError" id="plan-name-err" class="error small">{{ saveError }}</p>
+          <div v-if="nameTaken" class="taken" role="alert">
+            <span>A plan named “{{ planName.trim() }}” already exists. Replace it?</span>
+            <BaseButton variant="danger" size="sm" @click="save(true)">Replace</BaseButton>
+            <BaseButton variant="ghost" size="sm" @click="nameTaken = false">Cancel</BaseButton>
+          </div>
+        </form>
+        <BaseButton variant="danger" size="sm" class="remove" @click="b.reset(); notice = null">Start a new plan</BaseButton>
       </template>
     </aside>
   </div>
@@ -458,6 +543,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 .kpis span { display: block; font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; font-weight: 600; }
 .kpis b { font-size: 18px; }
 .share { display: flex; gap: 6px; }
+.savedhead { margin-top: 18px; }
+.saved { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.saved li { display: flex; align-items: center; gap: 6px; padding: 8px 10px; border: 1px solid var(--border); }
+.savedname { flex: 1; min-width: 0; display: grid; }
+.savedname b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.savebox { margin-top: 12px; }
+.taken { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 6px; font-size: 13px; }
 .share input { font-family: var(--mono); font-size: 12px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); margin: 0; }
 

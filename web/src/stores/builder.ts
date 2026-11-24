@@ -14,6 +14,7 @@ export const useBuilder = defineStore('builder', () => {
   const selected = ref<string | null>(null)
   const past = ref<Plan[]>([])
   const future = ref<Plan[]>([])
+  const savedAs = ref<string | null>(null) // the name it was last saved or opened under, to prefill Save
 
   // Every change goes through here so it can be undone.
   function change(fn: (p: Plan) => void) {
@@ -74,9 +75,10 @@ export const useBuilder = defineStore('builder', () => {
     change((p) => { p.home = 'house'; p.aps = [] })
     step.value = 1
     selected.value = null
+    savedAs.value = null
   }
 
   const canUndo = computed(() => past.value.length > 0)
   const canRedo = computed(() => future.value.length > 0)
-  return { plan, step, selected, canUndo, canRedo, change, beginDrag, moveLive, undo, redo, setHome, addAp, removeAp, updateAp, load, reset }
+  return { plan, step, selected, savedAs, canUndo, canRedo, change, beginDrag, moveLive, undo, redo, setHome, addAp, removeAp, updateAp, load, reset }
 })

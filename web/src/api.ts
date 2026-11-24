@@ -77,6 +77,29 @@ export interface Job {
 
 export const DEMO = import.meta.env.VITE_DEMO === '1'
 
+// A saved network plan, as listed (no body) and as opened (with the plan in the download file format).
+export interface SavedPlan { id: number; name: string; home: string; aps: number; created: string; updated: string }
+export interface SavedPlanFull extends SavedPlan { plan: unknown }
+export class ApiError extends Error {
+  constructor(public status: number, message: string) { super(message) }
+}
+
+// Sends JSON and turns an error reply into an ApiError with the server's own message.
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
+  const res = await fetch(`/api${path}`, {
+    method,
+    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    body: body === undefined ? undefined : JSON.stringify(body),
+  })
+  if (res.status === 204) return undefined as T
+  const data = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    const d = (data as { detail?: unknown }).detail
+    throw new ApiError(res.status, typeof d === 'string' ? d : `${res.status} ${res.statusText}`)
+  }
+  return data as T
+}
+
 async function get<T>(path: string): Promise<T> {
   // /runs/2026... -> demo/runs/2026....json ; /summary -> demo/summary.json
   const url = DEMO ? `${import.meta.env.BASE_URL}demo${path}.json` : `/api${path}`
@@ -117,6 +140,14 @@ export const api = {
     const body = await res.json()
     if (!res.ok) throw new Error(body.detail ?? `${res.status} ${res.statusText}`)
     return body as Job
+  },
+
+  // Saved plans live in the API's SQLite database, so the read-only demo has none.
+  plans: {
+    list: () => send<SavedPlan[]>('GET', '/plans'),
+    get: (id: number) => send<SavedPlanFull>('GET', `/plans/${id}`),
+    save: (name: string, plan: unknown, replace = false) => send<SavedPlan>('POST', '/plans', { name, plan, replace }),
+    remove: (id: number) => send<void>('DELETE', `/plans/${id}`),
   },
 
   artifactUrl: (dir: string, name: string) =>
