@@ -29,11 +29,14 @@ from pathlib import Path
 import yaml
 from fastapi import FastAPI, HTTPException, Request, Response
 from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
-from pydantic import BaseModel
+from typing import Literal
+
+from pydantic import BaseModel, Field, field_validator
 
 from testbed import LAB_DIR, REPO_ROOT, REPORTS_DIR
 from testbed import dashboard
 from testbed.runstore import RunStore
+from testbed.planstore import DEFAULT_CLIENT, NameTaken, PlanStore
 
 # Suites the panel may start. android needs a phone on the host, rf needs real radios, unit is CI's job.
 STARTABLE = [s for s in dashboard.SUITES if s not in ("android", "rf", "unit")] + ["home"]
@@ -227,6 +230,46 @@ class StartRun(BaseModel):
     suite: str
 
 
+# -- saved network plans --------------------------------------------------------------------------
+# The same shape as the file the builder downloads (web/src/builder.ts planToFile), checked here as well
+# as in the browser, because the API must not trust what a client sends.
+class PlanAP(BaseModel):
+    name: str = Field(min_length=1, max_length=20)
+    model: Literal["compact", "standard", "longrange"]
+    band: Literal["both", "2.4", "5"]
+    channel24: Literal["auto", 1, 6, 11]
+    channel5: Literal["auto", 36, 40, 44, 48, 149, 153, 157, 161]
+    xMetres: float = Field(ge=0, le=18)
+    yMetres: float = Field(ge=0, le=12)
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("name is empty")
+        return v.strip()
+
+
+class PlanBody(BaseModel):
+    format: Literal["wifi-plan"]
+    version: Literal[1]
+    home: Literal["apartment", "house", "office"]
+    accessPoints: list[PlanAP] = Field(min_length=1, max_length=4)
+
+
+class SavePlan(BaseModel):
+    name: str = Field(min_length=1, max_length=60)
+    plan: PlanBody
+    replace: bool = False  # True overwrites a plan that already has this name
+
+    @field_validator("name")
+    @classmethod
+    def _name(cls, v: str) -> str:
+        if not v.strip():
+            raise ValueError("name is empty")
+        return v.strip()
+
+
 def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inventory.yaml",
                is_root=lambda: os.geteuid() == 0) -> FastAPI:
     app = FastAPI(title="wifi-testbed API")
@@ -298,6 +341,42 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
         if not is_root():
             raise HTTPException(403, "lab runs need root: start the API with sudo -E")
         return jobs.start(body.suite)
+
+    # Saved plans. One client today ("default"); `client` in the query string is where a login would
+    # plug in later, and the store already keeps every client's plans apart.
+    plans = PlanStore(reports_dir / "plans.db")
+
+    def client_of(client: str) -> int:
+        cid = plans.client_id(client)
+        if cid is None:
+            raise HTTPException(404, "no such client")
+        return cid
+
+    @app.get("/api/plans")
+    def list_plans(client: str = DEFAULT_CLIENT):
+        return plans.list(client_of(client))
+
+    @app.get("/api/plans/{plan_id}")
+    def get_plan(plan_id: int, client: str = DEFAULT_CLIENT):
+        p = plans.get(client_of(client), plan_id)
+        if p is None:
+            raise HTTPException(404, "no such plan")
+        return p
+
+    @app.post("/api/plans")
+    def save_plan(body: SavePlan, response: Response, client: str = DEFAULT_CLIENT):
+        try:
+            saved, created = plans.save(client_of(client), body.name, body.plan.model_dump(), replace=body.replace)
+        except NameTaken:
+            raise HTTPException(409, f"A plan named “{body.name}” already exists.")
+        response.status_code = 201 if created else 200
+        return saved
+
+    @app.delete("/api/plans/{plan_id}", status_code=204)
+    def delete_plan(plan_id: int, client: str = DEFAULT_CLIENT):
+        if not plans.delete(client_of(client), plan_id):
+            raise HTTPException(404, "no such plan")
+        return Response(status_code=204)
 
     @app.get("/api/jobs/current")
     def current_job():

@@ -105,3 +105,14 @@ test('a plan downloads as a readable file and uploads back, and a bad file is re
   await expect(page.getByRole('status')).toContainText('not a Wi-Fi plan')
   await expect(page.locator('g.ap')).toHaveCount(2) // the loaded plan is untouched
 })
+
+test('the demo says saving by name needs the lab API', async ({ page }) => {
+  await page.goto('/#/builder')
+  await expect(page.getByRole('heading', { name: 'Saved plans' })).toBeVisible()
+  await expect(page.getByText(/Saving by name needs the lab API/)).toBeVisible()
+  await page.getByRole('button', { name: 'Next: Access points' }).click()
+  await page.getByRole('button', { name: '+ Add access point' }).click()
+  await page.getByRole('button', { name: 'Next: Check' }).click()
+  await page.getByRole('button', { name: 'Next: Review' }).click()
+  await expect(page.getByLabel('Save as')).toHaveCount(0)
+})

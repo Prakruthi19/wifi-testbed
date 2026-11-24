@@ -187,3 +187,59 @@ def test_job_events_push_progress_and_end_with_the_final_state(lab):
     assert len(events) >= 2  # pushed as the log grew, not only at the end
     assert events[-1]["status"] == "passed" and events[-1]["log_tail"][-1] == "line 2"
     assert all(e["status"] == "running" for e in events[:-1])
+
+
+# -- saved plans ---------------------------------------------------------------------------------
+def _plan(name="AP 1", **ap):
+    return {"format": "wifi-plan", "version": 1, "home": "house", "accessPoints": [
+        {"name": name, "model": "standard", "band": "both", "channel24": "auto", "channel5": 36,
+         "xMetres": 4.5, "yMetres": 3.0, **ap}]}
+
+
+def test_plans_save_list_open_and_delete(lab):
+    c = client(lab)
+    assert c.get("/api/plans").json() == []
+    r = c.post("/api/plans", json={"name": "  Smith house ", "plan": _plan()})
+    assert r.status_code == 201
+    saved = r.json()
+    assert saved["name"] == "Smith house" and saved["home"] == "house" and saved["aps"] == 1
+    assert [p["name"] for p in c.get("/api/plans").json()] == ["Smith house"]
+    full = c.get(f"/api/plans/{saved['id']}").json()
+    assert full["plan"]["accessPoints"][0]["channel5"] == 36
+    assert c.delete(f"/api/plans/{saved['id']}").status_code == 204
+    assert c.get(f"/api/plans/{saved['id']}").status_code == 404
+
+
+def test_plans_same_name_needs_replace(lab):
+    c = client(lab)
+    first = c.post("/api/plans", json={"name": "Office", "plan": _plan()}).json()
+    r = c.post("/api/plans", json={"name": "office", "plan": _plan("Hall AP")})  # names ignore case
+    assert r.status_code == 409 and "already exists" in r.json()["detail"]
+    r = c.post("/api/plans", json={"name": "office", "plan": _plan("Hall AP"), "replace": True})
+    assert r.status_code == 200 and r.json()["id"] == first["id"]
+    assert c.get(f"/api/plans/{first['id']}").json()["plan"]["accessPoints"][0]["name"] == "Hall AP"
+    assert len(c.get("/api/plans").json()) == 1
+
+
+@pytest.mark.parametrize("bad", [
+    {"home": "castle"},                                      # unknown floor plan
+    {"accessPoints": []},                                    # no access points
+    {"accessPoints": [_plan()["accessPoints"][0]] * 5},      # more than 4
+    {"accessPoints": [{**_plan()["accessPoints"][0], "channel24": 3}]},   # overlapping 2.4 GHz channel
+    {"accessPoints": [{**_plan()["accessPoints"][0], "xMetres": 99}]},    # outside the house
+])
+def test_plans_reject_bad_input(lab, bad):
+    r = client(lab).post("/api/plans", json={"name": "x", "plan": {**_plan(), **bad}})
+    assert r.status_code == 422
+
+
+def test_plans_are_kept_per_client(lab):
+    c = client(lab)
+    c.post("/api/plans", json={"name": "Mine", "plan": _plan()})
+    assert c.get("/api/plans?client=nobody").status_code == 404
+    store = api.PlanStore(lab / "reports" / "plans.db")
+    with store._connect() as db:
+        db.execute("INSERT INTO clients (slug, name, created) VALUES ('acme', 'Acme', 'now')")
+    assert c.get("/api/plans?client=acme").json() == []          # another client sees none of ours
+    c.post("/api/plans?client=acme", json={"name": "Mine", "plan": _plan()})  # same name is fine there
+    assert len(c.get("/api/plans").json()) == 1
