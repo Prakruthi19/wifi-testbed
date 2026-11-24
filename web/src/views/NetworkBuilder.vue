@@ -149,7 +149,7 @@ function toPlan(e: PointerEvent) {
 }
 function grab(ap: PlanAp, e: PointerEvent) {
   b.selected = ap.id
-  if (b.step !== 2) b.step = 2
+  if (b.step === 1) b.step = 2 // on Check and Review, stay put so the numbers update as it moves
   b.beginDrag()
   dragging.value = ap.id
   ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
@@ -400,6 +400,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
       <!-- Step 3: check -->
       <template v-else-if="b.step === 3">
         <h2>Check the plan</h2>
+        <p class="muted small">Drag an access point on the plan and the numbers below change as it moves.</p>
         <ul v-if="warns.length" class="warns">
           <li v-for="(w, i) in warns" :key="i" :class="w.kind"><span class="icon" aria-hidden="true">!</span>{{ w.text }}</li>
         </ul>
