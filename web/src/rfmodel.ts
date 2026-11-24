@@ -26,7 +26,7 @@ export const GOOD_DBM = -67
 export const USABLE_DBM = -75
 
 // Walls in drawing units. Gaps between segments are doorways, which the signal passes without a wall loss.
-export const WALLS: [number, number, number, number][] = [
+export const WALLS: Wall[] = [
   [20, 20, 700, 20], [700, 20, 700, 460], [700, 460, 390, 460], [330, 460, 20, 460], [20, 460, 20, 20], // outside, front door 330-390
   [260, 20, 260, 200], [260, 260, 260, 460], // living | kitchen and hall
   [460, 20, 460, 140], [460, 200, 460, 300], [460, 360, 460, 460], // kitchen and hall | bedrooms
@@ -51,9 +51,12 @@ export interface Node { name: string; x: number; y: number; on: boolean; detail:
 const ICONS = ['phone', 'laptop', 'camera', 'plug', 'speaker', 'tv', 'tablet']
 export const iconOf = (name: string) => ICONS.find((k) => name.toLowerCase().includes(k)) ?? 'generic'
 
-export function wallsBetween(x0: number, y0: number, x1: number, y1: number) {
+export type Wall = [number, number, number, number]
+
+// walls: the lab home by default; the network builder passes the walls of the home it is planning.
+export function wallsBetween(x0: number, y0: number, x1: number, y1: number, walls: Wall[] = WALLS) {
   let n = 0
-  for (const [a, b, c, d] of WALLS) {
+  for (const [a, b, c, d] of walls) {
     const den = (x1 - x0) * (d - b) - (y1 - y0) * (c - a)
     if (den === 0) continue
     const t = ((a - x0) * (d - b) - (b - y0) * (c - a)) / den
@@ -63,10 +66,11 @@ export function wallsBetween(x0: number, y0: number, x1: number, y1: number) {
   return n
 }
 
-export function rssi(ap: { x: number; y: number }, x: number, y: number, band: Band) {
+// txDelta: how much stronger (or weaker) this radio transmits than the model's default, in dB.
+export function rssi(ap: { x: number; y: number }, x: number, y: number, band: Band, walls: Wall[] = WALLS, txDelta = 0) {
   const m = BAND_MODEL[band]
   const d = Math.max(0.5, Math.hypot(ap.x - x, ap.y - y) / PX_PER_M)
-  return m.txDbm - m.loss1m - 10 * m.n * Math.log10(d) - wallsBetween(ap.x, ap.y, x, y) * m.wallDb
+  return m.txDbm + txDelta - m.loss1m - 10 * m.n * Math.log10(d) - wallsBetween(ap.x, ap.y, x, y, walls) * m.wallDb
 }
 
 export function best(aps: Node[], x: number, y: number, band: Band) {
