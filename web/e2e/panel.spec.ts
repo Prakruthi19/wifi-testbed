@@ -189,24 +189,30 @@ test('going back to Test runs reuses the loaded runs instead of fetching them ag
   expect(asked.length).toBe(first)
 })
 
-test('the runs list shows 10 per page and fetches each new page from the server', async ({ page }) => {
+test('the runs list shows every page number and fetches only the runs a page needs', async ({ page }) => {
   const runs = Array.from({ length: 25 }, (_, i) => ({
     id: `2026${String(1000 - i).padStart(4, '0')}T000000Z`, finished: '2026-10-01T00:00:00+00:00',
     counts: { passed: 1, failed: 0, error: 0, skipped: 0 }, suites: ['failures'],
   }))
-  await page.route('**/demo/runs.json', (r) => r.fulfill({ json: runs }))
+  let listCalls = 0
+  await page.route('**/demo/runs.json', (r) => { listCalls++; return r.fulfill({ json: runs }) })
+  await page.route('**/demo/summary.json', async (r) => {
+    const res = await r.fetch(); return r.fulfill({ response: res, json: { ...(await res.json()), runs: 25 } })
+  })
   await page.goto('/#/runs')
   const rows = page.getByRole('table', { name: 'Runs' }).locator('tbody tr')
   const pager = page.getByRole('navigation', { name: 'Pages' })
-  const next = pager.getByRole('button', { name: 'Next page' })
   await expect(rows).toHaveCount(10)
-  await expect(pager).toContainText('1–10 of 10+ runs') // one page fetched, more on the server
-  await next.click()
-  await expect(pager).toContainText('11–20 of 20+ runs')
-  await next.click()
+  // All three page numbers show before pages 2 and 3 are fetched.
+  await expect(pager.getByRole('button', { name: /^Page \d+$/ })).toHaveCount(3)
+  await expect(pager).toContainText('1–10 of 25 runs')
+  const before = listCalls
+  await pager.getByRole('button', { name: 'Page 3' }).click() // jumps straight there in one fetch
   await expect(rows).toHaveCount(5)
   await expect(pager).toContainText('21–25 of 25 runs')
-  await expect(next).toBeDisabled()
-  await pager.getByRole('button', { name: '1', exact: true }).click() // already loaded: no new request
+  expect(listCalls - before).toBe(1)
+  await expect(pager.getByRole('button', { name: 'Next page' })).toBeDisabled()
+  await pager.getByRole('button', { name: 'Page 1' }).click() // already loaded: no new request
   await expect(rows).toHaveCount(10)
+  expect(listCalls - before).toBe(1)
 })

@@ -7,6 +7,7 @@ import { PAGE, useRuns } from '../stores/runs'
 import { SUITES } from '../describe'
 import { formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
 import { useJobs } from '../stores/jobs'
+import { useSummary } from '../stores/summary'
 import CountsBar from '../components/CountsBar.vue'
 import ResultsGrid from '../components/ResultsGrid.vue'
 
@@ -29,19 +30,38 @@ const suites = computed(() => [...new Set(runs.value.flatMap((r) => r.suites))].
 const shown = computed(() =>
   runs.value.filter((r) => (!suite.value || r.suites.includes(suite.value)) && (!onlyFailing.value || r.counts.failed + r.counts.error > 0)),
 )
-// 10 runs per page. The API sends one page at a time (keyset: before=<last id>), so Next fetches
-// from the server only when it reaches the end of what is loaded; going back reuses loaded pages.
+// 10 runs per page. The API sends one page at a time (keyset: before=<last id>). The total comes from
+// the summary (already loaded for the top bar), so every page number shows before its runs are fetched.
+// Clicking a page fetches only the runs up to it that are not loaded yet; earlier pages are reused.
 const ROWS = PAGE
+const summary = useSummary()
 const page = ref(1)
 watch([suite, onlyFailing], () => (page.value = 1))
-const pages = computed(() => Math.max(1, Math.ceil(shown.value.length / ROWS)))
+const filtered = computed(() => Boolean(suite.value || onlyFailing.value))
+// Filters run on the loaded runs only, so a filtered view counts what it has.
+const total = computed(() => (filtered.value ? shown.value.length : Math.max(summary.data?.runs ?? 0, runs.value.length)))
+const pages = computed(() => Math.max(1, Math.ceil(total.value / ROWS)))
 const pageRows = computed(() => shown.value.slice((page.value - 1) * ROWS, page.value * ROWS))
-const from = computed(() => (shown.value.length ? (page.value - 1) * ROWS + 1 : 0))
-const to = computed(() => Math.min(page.value * ROWS, shown.value.length))
-const canNext = computed(() => page.value < pages.value || store.hasMore)
-async function next() {
-  if (page.value >= pages.value && store.hasMore) await store.loadMore()
-  if (page.value < pages.value) page.value++
+const from = computed(() => (total.value ? (page.value - 1) * ROWS + 1 : 0))
+const to = computed(() => Math.min(page.value * ROWS, total.value))
+const canNext = computed(() => page.value < pages.value || (filtered.value && store.hasMore))
+// Every page number up to 10 pages; beyond that first, last, and two pages either side of this one.
+const pageList = computed<(number | '…')[]>(() => {
+  const n = pages.value, p = page.value
+  if (n <= 10) return Array.from({ length: n }, (_, i) => i + 1)
+  const mid = [p - 2, p - 1, p, p + 1, p + 2].filter((x) => x > 1 && x < n)
+  const out: (number | '…')[] = [1]
+  if (mid[0] > 2) out.push('…')
+  out.push(...mid)
+  if (mid[mid.length - 1] < n - 1) out.push('…')
+  out.push(n)
+  return out
+})
+async function goTo(n: number) {
+  if (n < 1) return
+  if (filtered.value) { if (n > pages.value && store.hasMore) await store.loadMore() }
+  else await store.loadUntil(n * ROWS)
+  page.value = Math.min(n, pages.value)
 }
 const gridRuns = computed(() => shown.value.slice(0, 20).map((r) => details.value[r.id]).filter(Boolean))
 
@@ -141,11 +161,14 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     </div>
 
     <nav v-if="tab === 'runs' && !loading && !error && shown.length" class="pager" aria-label="Pages">
-      <span class="muted small">{{ from }}–{{ to }} of {{ shown.length }}{{ store.hasMore ? '+' : '' }} runs<template v-if="suite || onlyFailing"> (filtered)</template></span>
+      <span class="muted small">{{ from }}–{{ to }} of {{ total }}{{ filtered && store.hasMore ? '+' : '' }} runs<template v-if="filtered"> (filtered)</template></span>
       <div class="pages">
-        <button type="button" class="ghost" :disabled="page === 1" aria-label="Previous page" @click="page--">‹ Prev</button>
-        <button v-for="n in pages" :key="n" type="button" class="ghost num" :aria-current="n === page ? 'page' : undefined" @click="page = n">{{ n }}</button>
-        <button type="button" class="ghost" :disabled="!canNext || store.loadingMore" aria-label="Next page" @click="next()">{{ store.loadingMore ? 'Loading…' : 'Next ›' }}</button>
+        <button type="button" class="pg" :disabled="page === 1" aria-label="Previous page" @click="goTo(page - 1)">‹ Prev</button>
+        <template v-for="(n, i) in pageList" :key="i">
+          <span v-if="n === '…'" class="gap" aria-hidden="true">…</span>
+          <button v-else type="button" class="pg num" :aria-label="`Page ${n}`" :aria-current="n === page ? 'page' : undefined" :disabled="store.loadingMore" @click="goTo(n)">{{ n }}</button>
+        </template>
+        <button type="button" class="pg" :disabled="!canNext || store.loadingMore" aria-label="Next page" @click="goTo(page + 1)">{{ store.loadingMore ? 'Loading…' : 'Next ›' }}</button>
       </div>
     </nav>
   </div>
@@ -183,12 +206,14 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .pad { padding: 16px; margin: 0; }
 .pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
 .pages { display: flex; flex-wrap: wrap; gap: 4px; }
-.pages button { min-height: 32px; padding: 4px 10px; font-size: 13px; }
-.pages .num { min-width: 34px; }
-.pages [aria-current='page'] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.ghost:disabled { opacity: .45; cursor: default; }
-.ghost { background: var(--card); color: var(--ink); border: 1px solid var(--line); }
-.ghost:hover:not(:disabled) { background: var(--bg); }
+/* Pager buttons use theme tokens only (--card, --ink, --line, --hover, --accent), so light and dark
+   each get their own hover colour from style.css instead of one hard-coded shade. */
+.pg { min-height: 32px; padding: 4px 10px; font-size: 13px; background: var(--card); color: var(--ink); border: 1px solid var(--line); }
+.pg.num { min-width: 34px; }
+.pg:hover:not(:disabled) { background: var(--hover); color: var(--accent); border-color: var(--accent); }
+.pg[aria-current='page'], .pg[aria-current='page']:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.pg:disabled:not([aria-current]) { opacity: .45; cursor: default; }
+.gap { align-self: center; padding: 0 4px; color: var(--muted); }
 .error { margin: 16px; }
 
 .runs th { white-space: nowrap; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }
