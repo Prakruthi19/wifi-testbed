@@ -4,7 +4,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import InfoTip from '../components/InfoTip.vue'
-import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
+import { BaseButton, ModelTag, SegmentedControl, ToastMessage } from '../components/ui'
 import { useBuilder } from '../stores/builder'
 import { ApiError, DEMO, api, formatTime, type SavedPlan } from '../api'
 import { useAuth } from '../stores/auth'
@@ -264,7 +264,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
       <input ref="fileInput" type="file" accept=".json,application/json" class="sr" aria-label="Upload a plan file" @change="upload" />
     </div>
   </div>
-  <p v-if="notice" :class="notice.kind === 'error' ? 'error' : 'ok'" role="status">{{ notice.text }} <button type="button" class="x" aria-label="Dismiss" @click="notice = null">×</button></p>
+  <ToastMessage v-if="notice" :kind="notice.kind" :text="notice.text" @close="notice = null" />
 
   <ol class="stepper" aria-label="Steps">
     <li v-for="(s, i) in STEPS" :key="s" :class="stepState(i + 1)">
@@ -479,10 +479,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 <style scoped>
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
 .tools { display: flex; gap: 6px; flex-wrap: wrap; }
-.error, .ok { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius); }
-.error { color: var(--fail); background: var(--fail-bg); }
-.ok { color: var(--pass); background: var(--pass-bg); }
-.x { background: none; color: inherit; border: 0; min-height: 0; padding: 0 4px; font-size: 18px; line-height: 1; }
+.error { color: var(--fail); }
 
 .stepper { display: flex; gap: 8px; list-style: none; padding: 0; margin: 12px 0 16px; counter-reset: s; }
 .stepper li { flex: 1; position: relative; }

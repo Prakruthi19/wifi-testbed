@@ -7,8 +7,9 @@ components in `../` (ChannelMap, ResultsGrid, CountsBar, ...) are built from the
 |---|---|---|
 | `BaseButton` | Every button that is not a link | `variant`: primary, secondary, ghost, danger; `size`: md, sm |
 | `SegmentedControl` | Picking one of 2 to 5 options (band, view, filter) | `v-model`, `options`, `label` or `labelledby`; `#option` slot |
-| `Pager` | Page numbers under a list | `page`, `pages`, `busy`, `canNext`; emits `go` |
+| `Pager` | Page numbers under a list | `page`, `pages`, `busy`, `hasMore`; emits `go` |
 | `ModelTag` | Marking estimated, not measured, numbers | `title` (the explanation) |
+| `ToastMessage` | A short popup after an action ("Saved as …") | `kind`: ok (closes itself after `timeout` ms, paused on hover or focus) or error (stays); emits `close` |
 
 Rules:
 - Colours, radius, shadow and fonts come only from the tokens in `src/style.css` (`var(--accent)`, ...),

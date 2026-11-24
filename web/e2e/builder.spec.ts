@@ -98,11 +98,12 @@ test('a plan downloads as a readable file and uploads back, and a bad file is re
   await expect(page.locator('g.ap')).toHaveCount(0)
   await page.getByLabel('Upload a plan file').setInputFiles({ name: 'mine.json', mimeType: 'application/json', buffer: Buffer.from(text) })
   await expect(page.getByRole('status')).toContainText('Loaded mine.json')
+  await expect(page.getByRole('status')).toHaveCount(0, { timeout: 6000 }) // the popup closes itself
   await expect(page.locator('g.ap')).toHaveCount(2)
   await expect(page.getByRole('button', { name: 'Check' })).toHaveAttribute('aria-current', 'step')
 
   await page.getByLabel('Upload a plan file').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello": 1}') })
-  await expect(page.getByRole('status')).toContainText('not a Wi-Fi plan')
+  await expect(page.getByRole('alert')).toContainText('not a Wi-Fi plan') // errors stay until closed
   await expect(page.locator('g.ap')).toHaveCount(2) // the loaded plan is untouched
 })
 
