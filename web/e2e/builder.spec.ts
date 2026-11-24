@@ -76,3 +76,32 @@ test('undo and redo, and arrow keys move an access point', async ({ page, isMobi
   await page.getByRole('button', { name: 'Redo' }).click()
   await expect(page.locator('g.ap')).toHaveCount(1)
 })
+
+test('a plan downloads as a readable file and uploads back, and a bad file is refused', async ({ page }) => {
+  await page.goto('/#/builder')
+  await page.getByRole('radio', { name: /Small office/ }).click()
+  await next(page, 'Access points').click()
+  await add(page).click()
+  await add(page).click()
+
+  const [file] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: 'Download' }).click()])
+  expect(file.suggestedFilename()).toBe('wifi-plan-office.json')
+  const text = await (await import('node:fs/promises')).readFile((await file.path())!, 'utf8')
+  const saved = JSON.parse(text)
+  expect(saved).toMatchObject({ format: 'wifi-plan', version: 1, home: 'office' })
+  expect(saved.accessPoints.map((a: { name: string }) => a.name)).toEqual(['AP 1', 'AP 2'])
+
+  // A fresh page: upload the file and get the same plan back on the Check step.
+  await page.goto('/#/sites')
+  await page.reload()
+  await page.goto('/#/builder')
+  await expect(page.locator('g.ap')).toHaveCount(0)
+  await page.getByLabel('Upload a plan file').setInputFiles({ name: 'mine.json', mimeType: 'application/json', buffer: Buffer.from(text) })
+  await expect(page.getByRole('status')).toContainText('Loaded mine.json')
+  await expect(page.locator('g.ap')).toHaveCount(2)
+  await expect(page.getByRole('button', { name: 'Check' })).toHaveAttribute('aria-current', 'step')
+
+  await page.getByLabel('Upload a plan file').setInputFiles({ name: 'notes.json', mimeType: 'application/json', buffer: Buffer.from('{"hello": 1}') })
+  await expect(page.getByRole('status')).toContainText('not a Wi-Fi plan')
+  await expect(page.locator('g.ap')).toHaveCount(2) // the loaded plan is untouched
+})

@@ -168,23 +168,55 @@ export function encodePlan(plan: Plan): string {
   return btoa(unescape(encodeURIComponent(JSON.stringify(compact)))).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
 }
 
+// One checker for both a shared link and an uploaded file: unknown values fall back to safe defaults,
+// positions are kept inside the home, and at most MAX_APS access points are kept.
+type RawAp = { name: unknown; model: unknown; band: unknown; ch24: unknown; ch5: unknown; x: unknown; y: unknown }
+function sanitize(home: unknown, raw: RawAp[]): Plan | null {
+  if (!HOMES.some((h) => h.id === home)) return null
+  const b = homeOf(home as HomeId).bounds
+  const clamp = (v: unknown, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number(v) || lo))
+  const chan = (v: unknown, band: Band) => (CHANNELS[band].includes(Number(v)) ? Number(v) : 'auto')
+  const aps: PlanAp[] = raw.slice(0, MAX_APS).map((a, i) => ({
+    id: `s${i}`, name: String(a.name ?? '').slice(0, 40),
+    model: typeof a.model === 'string' && a.model in MODELS ? (a.model as ModelId) : 'standard',
+    band: ['both', '2.4', '5'].includes(a.band as string) ? (a.band as BandChoice) : 'both',
+    ch: { '2.4': chan(a.ch24, '2.4'), '5': chan(a.ch5, '5') },
+    x: Math.round(clamp(a.x, b.x0, b.x1)), y: Math.round(clamp(a.y, b.y0, b.y1)),
+  }))
+  return { home: home as HomeId, aps }
+}
+
 // Anything wrong in a shared link (edited by hand, cut short) gives null instead of a broken plan.
 export function decodePlan(text: string): Plan | null {
   try {
     const raw = JSON.parse(decodeURIComponent(escape(atob(text.replace(/-/g, '+').replace(/_/g, '/')))))
-    if (!HOMES.some((h) => h.id === raw.h) || !Array.isArray(raw.a)) return null
-    const b = homeOf(raw.h).bounds
-    const clamp = (v: unknown, lo: number, hi: number) => Math.min(hi, Math.max(lo, Number(v) || lo))
-    const chan = (v: unknown, band: Band) => (CHANNELS[band].includes(Number(v)) ? Number(v) : 'auto')
-    const aps: PlanAp[] = raw.a.slice(0, MAX_APS).map((a: unknown[], i: number) => ({
-      id: `s${i}`, name: String(a[0] ?? '').slice(0, 40),
-      model: (a[1] as string) in MODELS ? (a[1] as ModelId) : 'standard',
-      band: ['both', '2.4', '5'].includes(a[2] as string) ? (a[2] as BandChoice) : 'both',
-      ch: { '2.4': chan(a[3], '2.4'), '5': chan(a[4], '5') },
-      x: clamp(a[5], b.x0, b.x1), y: clamp(a[6], b.y0, b.y1),
-    }))
-    return { home: raw.h, aps }
+    if (!Array.isArray(raw.a)) return null
+    return sanitize(raw.h, raw.a.map((a: unknown[]) => ({ name: a[0], model: a[1], band: a[2], ch24: a[3], ch5: a[4], x: a[5], y: a[6] })))
   } catch {
     return null
   }
+}
+
+// -- download and upload -------------------------------------------------------------------------
+// A plan file is plain, readable JSON with positions in metres, so a person can open it and see what it says.
+export const PLAN_FORMAT = 'wifi-plan'
+export function planToFile(plan: Plan): string {
+  const m = (v: number) => Math.round((v / PX_PER_M) * 10) / 10
+  return JSON.stringify({
+    format: PLAN_FORMAT, version: 1, home: plan.home,
+    accessPoints: plan.aps.map((a) => ({ name: a.name, model: a.model, band: a.band, channel24: a.ch['2.4'], channel5: a.ch['5'], xMetres: m(a.x), yMetres: m(a.y) })),
+  }, null, 2)
+}
+
+export function planFromFile(text: string): { plan: Plan; note?: string } | { error: string } {
+  let raw: { format?: unknown; home?: unknown; accessPoints?: unknown }
+  try { raw = JSON.parse(text) } catch { return { error: 'That file is not a plan: it is not valid JSON.' } }
+  if (!raw || raw.format !== PLAN_FORMAT || !Array.isArray(raw.accessPoints)) return { error: 'That JSON file is not a Wi-Fi plan saved from this page.' }
+  const list = raw.accessPoints as Record<string, unknown>[]
+  const plan = sanitize(raw.home, list.map((a) => ({
+    name: a?.name, model: a?.model, band: a?.band, ch24: a?.channel24, ch5: a?.channel5,
+    x: Number(a?.xMetres) * PX_PER_M, y: Number(a?.yMetres) * PX_PER_M,
+  })))
+  if (!plan) return { error: `That plan is for a home this page does not have (${String(raw.home)}).` }
+  return list.length > MAX_APS ? { plan, note: `Only the first ${MAX_APS} access points were loaded.` } : { plan }
 }

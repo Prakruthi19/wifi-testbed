@@ -8,7 +8,7 @@ import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
 import { useBuilder } from '../stores/builder'
 import { BAND_MODEL, H, LEVELS, W, levelOf, type Band } from '../rfmodel'
 import {
-  CHANNELS, HOMES, MAX_APS, MODELS, NAME_MAX, bandsOf, bestAt, channelOf, decodePlan, encodePlan, fieldErrors,
+  CHANNELS, HOMES, MAX_APS, MODELS, NAME_MAX, bandsOf, bestAt, channelOf, decodePlan, encodePlan, fieldErrors, planFromFile, planToFile,
   homeOf, planValid, roomCoverage, warnings, type BandChoice, type ModelId, type PlanAp,
 } from '../builder'
 
@@ -21,10 +21,34 @@ onMounted(() => {
   const text = route.query.plan
   if (typeof text !== 'string') return
   const p = decodePlan(text)
-  if (p) { b.load(p); b.step = 3 } else linkError.value = true
+  if (p) { b.load(p); b.step = 3 } else notice.value = { kind: 'error', text: 'That plan link is damaged, so a new plan was started.' }
   router.replace({ query: {} })
 })
-const linkError = ref(false)
+const notice = ref<{ kind: 'ok' | 'error'; text: string } | null>(null)
+
+// Download and upload run in the browser only: nothing is sent to a server.
+function download() {
+  const blob = new Blob([planToFile(b.plan)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `wifi-plan-${b.plan.home}.json`
+  a.click()
+  URL.revokeObjectURL(url)
+}
+const fileInput = ref<HTMLInputElement | null>(null)
+async function upload(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = '' // so choosing the same file again still fires change
+  if (!file) return
+  if (file.size > 100_000) { notice.value = { kind: 'error', text: 'That file is too big to be a plan.' }; return }
+  const r = planFromFile(await file.text())
+  if ('error' in r) { notice.value = { kind: 'error', text: r.error }; return }
+  b.load(r.plan)
+  b.step = 3
+  notice.value = { kind: 'ok', text: `Loaded ${file.name}.${r.note ? ' ' + r.note : ''}` }
+}
 
 const STEPS = ['Home', 'Access points', 'Check', 'Review']
 const home = computed(() => homeOf(b.plan.home))
@@ -165,9 +189,12 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
     <div class="tools">
       <BaseButton variant="secondary" size="sm" :disabled="!b.canUndo" title="Undo (Ctrl+Z)" @click="b.undo()">Undo</BaseButton>
       <BaseButton variant="secondary" size="sm" :disabled="!b.canRedo" title="Redo (Ctrl+Shift+Z)" @click="b.redo()">Redo</BaseButton>
+      <BaseButton variant="secondary" size="sm" title="Save this plan as a .json file" @click="download()">Download</BaseButton>
+      <BaseButton variant="secondary" size="sm" title="Open a plan saved from this page" @click="fileInput?.click()">Upload</BaseButton>
+      <input ref="fileInput" type="file" accept=".json,application/json" class="sr" aria-label="Upload a plan file" @change="upload" />
     </div>
   </div>
-  <p v-if="linkError" class="error" role="alert">That plan link is damaged, so a new plan was started.</p>
+  <p v-if="notice" :class="notice.kind === 'error' ? 'error' : 'ok'" role="status">{{ notice.text }} <button type="button" class="x" aria-label="Dismiss" @click="notice = null">×</button></p>
 
   <ol class="stepper" aria-label="Steps">
     <li v-for="(s, i) in STEPS" :key="s" :class="stepState(i + 1)">
@@ -344,8 +371,11 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 
 <style scoped>
 .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
-.tools { display: flex; gap: 6px; }
-.error { color: var(--fail); background: var(--fail-bg); padding: 8px 12px; border-radius: var(--radius); }
+.tools { display: flex; gap: 6px; flex-wrap: wrap; }
+.error, .ok { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding: 8px 12px; border-radius: var(--radius); }
+.error { color: var(--fail); background: var(--fail-bg); }
+.ok { color: var(--pass); background: var(--pass-bg); }
+.x { background: none; color: inherit; border: 0; min-height: 0; padding: 0 4px; font-size: 18px; line-height: 1; }
 
 .stepper { display: flex; gap: 8px; list-style: none; padding: 0; margin: 12px 0 16px; counter-reset: s; }
 .stepper li { flex: 1; position: relative; }
