@@ -217,8 +217,8 @@ test('the runs list shows every page number and fetches only the runs a page nee
   expect(listCalls - before).toBe(1)
 })
 
-test('the arrows beside each column sort all runs up and down, not just the page on screen', async ({ page, isMobile }) => {
-  // 25 runs; only the oldest one (on page 3) has failures, 5 of 10.
+test('clicking Result, Finished or Test time sorts every run; other columns do not sort', async ({ page, isMobile }) => {
+  // 25 runs; only the oldest one (on page 3) has failures.
   const runs = Array.from({ length: 25 }, (_, i) => ({
     id: `2026${String(1000 - i).padStart(4, '0')}T000000Z`, finished: '2026-10-01T00:00:00+00:00',
     counts: { passed: i === 24 ? 5 : 10, failed: i === 24 ? 5 : 0, error: 0, skipped: 0 }, suites: ['failures'],
@@ -232,17 +232,19 @@ test('the arrows beside each column sort all runs up and down, not just the page
   const first = table.locator('tbody tr').first()
   await expect(first).toContainText('All 10 passed')
   if (isMobile) { // phones hide the column headers, so the same sort is a menu
-    await page.locator('.phone-sort select').selectOption('summary:desc')
+    await page.locator('.phone-sort select').selectOption('result:asc')
     await expect(first).toContainText('5 of 10 failed')
     return
   }
-  await table.getByRole('button', { name: 'Sort by Summary, descending' }).click()
-  await expect(first).toContainText('5 of 10 failed') // came from page 3
-  await expect(table.getByRole('columnheader', { name: /Summary/ })).toHaveAttribute('aria-sort', 'descending')
-  await table.getByRole('button', { name: 'Sort by Summary, ascending' }).click()
+  const result = table.getByRole('button', { name: 'Result' })
+  const header = table.getByRole('columnheader', { name: /Result/ })
+  await result.click() // ascending: Failed before Passed, and the failing run comes from page 3
+  await expect(first).toContainText('5 of 10 failed')
+  await expect(header).toHaveAttribute('aria-sort', 'ascending')
+  await result.click() // descending
   await expect(first).toContainText('All 10 passed')
-  await table.getByRole('button', { name: 'Sort by Result, ascending' }).click() // Failed < Passed
-  await expect(first).toContainText('Failed')
-  await table.getByRole('button', { name: 'Sort by Result, ascending' }).click() // same arrow again: off
-  await expect(table.getByRole('columnheader', { name: /Result/ })).toHaveAttribute('aria-sort', 'none')
+  await expect(header).toHaveAttribute('aria-sort', 'descending')
+  await result.click() // off: back to newest first
+  await expect(header).toHaveAttribute('aria-sort', 'none')
+  for (const name of ['Suites', 'Summary', 'Tests']) await expect(table.getByRole('button', { name })).toHaveCount(0)
 })
