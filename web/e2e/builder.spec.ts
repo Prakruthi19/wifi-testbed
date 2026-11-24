@@ -132,3 +132,23 @@ test('the demo login page explains that logging in needs the lab', async ({ page
   await expect(page.getByText(/Logging in needs the lab API/)).toBeVisible()
   await expect(page.getByLabel('Password')).toHaveCount(0)
 })
+
+test('dragging an access point on the Check step updates the room table as it moves', async ({ page }) => {
+  await page.goto('/#/builder')
+  await page.getByRole('button', { name: 'Next: Access points' }).click()
+  await page.getByRole('button', { name: '+ Add access point' }).click()
+  await page.getByRole('button', { name: 'Next: Check' }).click()
+  const office = page.getByRole('row', { name: /^Office/ })
+  const before = await office.innerText()
+  const ap = page.locator('g.ap').first()
+  const box = (await ap.boundingBox())!
+  const plan = (await page.locator('svg[role="group"]').boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await page.mouse.down()
+  // Move toward the Office (bottom left) in small steps without letting go: the table changes mid-drag.
+  for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + (plan.x + plan.width * 0.12 - box.x) * i / 10, box.y + (plan.y + plan.height * 0.85 - box.y) * i / 10)
+  await expect(office).not.toHaveText(before)
+  await expect(page.getByRole('button', { name: 'Check' })).toHaveAttribute('aria-current', 'step')
+  await page.mouse.up()
+  await expect(office).not.toHaveText(before) // and it keeps the new value once let go
+})
