@@ -3,6 +3,7 @@
     .venv/bin/uvicorn testbed.api:app --port 8000            # results and inventory (no root needed)
     sudo -E .venv/bin/uvicorn testbed.api:app --port 8000    # also lets the panel start lab runs
     .venv/bin/python -m testbed.api --export web/public/demo # freeze the current results as demo data
+    .venv/bin/python -m testbed.auth add-user you@example.com # a login for saving network plans
 
 Data comes from reports/history/*.json (written by every pytest run, see testbed/dashboard.py),
 reports/artifacts/<test>/ and lab/inventory.yaml. Passphrases are never sent to the browser.
@@ -36,7 +37,8 @@ from pydantic import BaseModel, Field, field_validator
 from testbed import LAB_DIR, REPO_ROOT, REPORTS_DIR
 from testbed import dashboard
 from testbed.runstore import RunStore
-from testbed.planstore import DEFAULT_CLIENT, NameTaken, PlanStore
+from testbed.planstore import NameTaken, PlanStore
+from testbed.auth import Auth, TooManyTries
 
 # Suites the panel may start. android needs a phone on the host, rf needs real radios, unit is CI's job.
 STARTABLE = [s for s in dashboard.SUITES if s not in ("android", "rf", "unit")] + ["home"]
@@ -257,6 +259,11 @@ class PlanBody(BaseModel):
     accessPoints: list[PlanAP] = Field(min_length=1, max_length=4)
 
 
+class Login(BaseModel):
+    email: str = Field(min_length=3, max_length=200)
+    password: str = Field(min_length=1, max_length=200)
+
+
 class SavePlan(BaseModel):
     name: str = Field(min_length=1, max_length=60)
     plan: PlanBody
@@ -311,10 +318,6 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
     def recent_runs(request: Request, n: int = RECENT_RUNS):
         return cached(request, lambda: [detail(r["id"]) for r in store.list(max(0, min(n, 100)))])
 
-    @app.get("/api/runs/recent")  # declared before /api/runs/{run_id} so "recent" is not read as an id
-    def recent_runs(n: int = RECENT_RUNS):
-        return data().recent(min(n, 100))
-
     @app.get("/api/runs/{run_id}")
     def run(request: Request, run_id: str):
         store.sync()
@@ -342,39 +345,71 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
             raise HTTPException(403, "lab runs need root: start the API with sudo -E")
         return jobs.start(body.suite)
 
-    # Saved plans. One client today ("default"); `client` in the query string is where a login would
-    # plug in later, and the store already keeps every client's plans apart.
+    # Saved plans belong to a client, and the client comes from the logged-in user's session, never
+    # from the request: a user cannot ask for another client's plans by changing a URL.
     plans = PlanStore(reports_dir / "plans.db")
+    auth = app.state.auth = Auth(reports_dir / "plans.db")
+    COOKIE = "session"
 
-    def client_of(client: str) -> int:
-        cid = plans.client_id(client)
-        if cid is None:
-            raise HTTPException(404, "no such client")
-        return cid
+    def current_user(request: Request) -> dict:
+        user = auth.user(request.cookies.get(COOKIE))
+        if user is None:
+            raise HTTPException(401, "Log in to use saved plans.")
+        return user
+
+    @app.post("/api/auth/login")
+    def login(body: Login, request: Request, response: Response):
+        try:
+            token = auth.login(body.email, body.password)
+        except TooManyTries as e:
+            raise HTTPException(429, f"Too many wrong tries. Wait {e.wait // 60 + 1} minutes and try again.",
+                                headers={"Retry-After": str(e.wait)})
+        if token is None:
+            raise HTTPException(401, "Email or password is wrong.")  # same words either way
+        auth.logout(request.cookies.get(COOKIE))  # rotate: the token this browser had before stops working
+        # HttpOnly: page scripts cannot read it. SameSite=Lax: other sites cannot make the browser send it
+        # with a POST or DELETE. Secure: HTTPS only, except on localhost, which browsers already trust.
+        local = request.url.hostname in ("localhost", "127.0.0.1")
+        response.set_cookie(COOKIE, token, httponly=True, samesite="lax", secure=not local, path="/api")
+        user = auth.user(token)
+        return {"email": user["email"], "client": user["client"]}
+
+    @app.post("/api/auth/logout", status_code=204)
+    def logout(request: Request):
+        auth.logout(request.cookies.get(COOKIE))
+        response = Response(status_code=204)
+        response.delete_cookie(COOKIE, path="/api")
+        return response
+
+    @app.get("/api/auth/me")
+    def me(request: Request):
+        user = current_user(request)
+        return {"email": user["email"], "client": user["client"]}
 
     @app.get("/api/plans")
-    def list_plans(client: str = DEFAULT_CLIENT):
-        return plans.list(client_of(client))
+    def list_plans(request: Request):
+        return plans.list(current_user(request)["client_id"])
 
     @app.get("/api/plans/{plan_id}")
-    def get_plan(plan_id: int, client: str = DEFAULT_CLIENT):
-        p = plans.get(client_of(client), plan_id)
+    def get_plan(plan_id: int, request: Request):
+        p = plans.get(current_user(request)["client_id"], plan_id)
         if p is None:
             raise HTTPException(404, "no such plan")
         return p
 
     @app.post("/api/plans")
-    def save_plan(body: SavePlan, response: Response, client: str = DEFAULT_CLIENT):
+    def save_plan(body: SavePlan, request: Request, response: Response):
         try:
-            saved, created = plans.save(client_of(client), body.name, body.plan.model_dump(), replace=body.replace)
+            saved, created = plans.save(current_user(request)["client_id"], body.name, body.plan.model_dump(),
+                                        replace=body.replace)
         except NameTaken:
             raise HTTPException(409, f"A plan named “{body.name}” already exists.")
         response.status_code = 201 if created else 200
         return saved
 
     @app.delete("/api/plans/{plan_id}", status_code=204)
-    def delete_plan(plan_id: int, client: str = DEFAULT_CLIENT):
-        if not plans.delete(client_of(client), plan_id):
+    def delete_plan(plan_id: int, request: Request):
+        if not plans.delete(current_user(request)["client_id"], plan_id):
             raise HTTPException(404, "no such plan")
         return Response(status_code=204)
 

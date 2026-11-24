@@ -7,6 +7,7 @@ import InfoTip from '../components/InfoTip.vue'
 import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
 import { useBuilder } from '../stores/builder'
 import { ApiError, DEMO, api, formatTime, type SavedPlan } from '../api'
+import { useAuth } from '../stores/auth'
 import { BAND_MODEL, H, LEVELS, W, levelOf, type Band } from '../rfmodel'
 import {
   CHANNELS, HOMES, MAX_APS, MODELS, NAME_MAX, bandsOf, bestAt, channelOf, decodePlan, encodePlan, fieldErrors, planFromFile, planToFile,
@@ -52,16 +53,24 @@ async function upload(e: Event) {
   notice.value = { kind: 'ok', text: `Loaded ${file.name}.${r.note ? ' ' + r.note : ''}` }
 }
 
-// Saved plans: kept by name in the lab API's SQLite database (reports/plans.db).
-// The demo site has no API, so there only Download and Upload work.
+// Saved plans: kept by name in the lab API's SQLite database (reports/plans.db), per client, and
+// only for a logged-in user. The demo site has no API, so there only Download and Upload work.
+const auth = useAuth()
 const saved = ref<SavedPlan[]>([])
 const savedError = ref('')
 const confirmDelete = ref<number | null>(null)
-async function loadSaved() {
-  if (DEMO) return
-  try { saved.value = await api.plans.list(); savedError.value = '' } catch (e) { savedError.value = (e as Error).message }
+// A 401 means the session ended: show the log-in prompt instead of an error.
+function failed(e: unknown): string | null {
+  if (e instanceof ApiError && e.status === 401) { auth.expired(); return null }
+  return (e as Error).message
 }
-onMounted(loadSaved)
+async function loadSaved() {
+  if (DEMO || !auth.user) { saved.value = []; return }
+  try { saved.value = await api.plans.list(); savedError.value = '' } catch (e) { savedError.value = failed(e) ?? '' }
+}
+onMounted(() => auth.load())
+watch(() => auth.user, loadSaved, { immediate: true })
+const loginLink = computed(() => ({ path: '/login', query: { next: route.fullPath } }))
 async function openSaved(s: SavedPlan) {
   try {
     const full = await api.plans.get(s.id)
@@ -71,7 +80,7 @@ async function openSaved(s: SavedPlan) {
     b.savedAs = full.name
     b.step = 3
     notice.value = { kind: 'ok', text: `Opened “${full.name}”.${r.note ? ' ' + r.note : ''}` }
-  } catch (e) { notice.value = { kind: 'error', text: (e as Error).message } }
+  } catch (e) { const m = failed(e); notice.value = m ? { kind: 'error', text: m } : null }
 }
 async function deleteSaved(s: SavedPlan) {
   confirmDelete.value = null
@@ -80,7 +89,7 @@ async function deleteSaved(s: SavedPlan) {
     saved.value = saved.value.filter((x) => x.id !== s.id)
     if (b.savedAs?.toLowerCase() === s.name.toLowerCase()) b.savedAs = null
     notice.value = { kind: 'ok', text: `Deleted “${s.name}”.` }
-  } catch (e) { notice.value = { kind: 'error', text: (e as Error).message } }
+  } catch (e) { const m = failed(e); notice.value = m ? { kind: 'error', text: m } : null }
 }
 
 const planName = ref('')
@@ -101,7 +110,7 @@ async function save(replace = false) {
     loadSaved()
   } catch (e) {
     if (e instanceof ApiError && e.status === 409) nameTaken.value = true
-    else saveError.value = (e as Error).message
+    else saveError.value = failed(e) ?? ''
   } finally { saving.value = false }
 }
 
@@ -312,6 +321,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
         </div>
         <h2 class="savedhead">Saved plans</h2>
         <p v-if="DEMO" class="muted small">Saving by name needs the lab API, so it works when you run the app in the VM. Here, use Download and Upload.</p>
+        <p v-else-if="!auth.checked" class="muted small">Checking your login…</p>
+        <p v-else-if="!auth.user" class="muted small"><RouterLink :to="loginLink">Log in</RouterLink> to save plans by name and open saved ones.</p>
         <p v-else-if="savedError" class="error small" role="alert">Could not load saved plans: {{ savedError }}</p>
         <p v-else-if="!saved.length" class="muted small">No saved plans yet. Save one on the Review step.</p>
         <ul v-else class="saved" aria-label="Saved plans">
@@ -430,7 +441,8 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
           <div class="share"><input id="share" :value="shareUrl" readonly @focus="($event.target as HTMLInputElement).select()" /><button type="button" @click="copyLink()">{{ copied ? 'Copied' : 'Copy' }}</button></div>
         </label>
         <p class="sr" aria-live="polite">{{ copied ? 'Link copied' : '' }}</p>
-        <form v-if="!DEMO" class="field savebox" @submit.prevent="save()">
+        <p v-if="!DEMO && auth.checked && !auth.user" class="muted small savebox"><RouterLink :to="loginLink">Log in</RouterLink> to save this plan by name.</p>
+        <form v-else-if="!DEMO && auth.user" class="field savebox" @submit.prevent="save()">
           <label for="plan-name">Save as</label>
           <div class="share">
             <input id="plan-name" v-model="planName" maxlength="60" autocomplete="off" :aria-invalid="!!saveError" :aria-describedby="saveError ? 'plan-name-err' : undefined" />

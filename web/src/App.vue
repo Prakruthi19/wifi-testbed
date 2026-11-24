@@ -4,12 +4,14 @@ import { useRoute } from 'vue-router'
 import { DEMO, formatTime } from './api'
 import { useSummary } from './stores/summary'
 import { useJobs } from './stores/jobs'
+import { useAuth } from './stores/auth'
 
 // The dashboard shell: a fixed sidebar (a bottom tab bar on phones), a top bar with the data source
 // and the theme switch, and the page in the remaining space.
 const summary = useSummary()
 const jobs = useJobs()
-onMounted(() => { summary.load(); jobs.resume() })
+const auth = useAuth()
+onMounted(() => { summary.load(); jobs.resume(); auth.load() })
 const route = useRoute()
 
 const NAV = [
@@ -32,6 +34,7 @@ const ICON: Record<string, string> = {
   sun: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',
   auto: 'M12 3a9 9 0 1 0 0 18zM12 3a9 9 0 0 1 0 18',
+  user: 'M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 20a8 8 0 0 1 16 0',
 }
 const active = (to: string) => (to === '/' ? route.path === '/' : route.path.startsWith(to))
 
@@ -85,6 +88,13 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
         </RouterLink>
         <span v-if="summary.data?.sample" class="chip warn" title="Placeholder data for layout only. These are not results from a real lab run.">Sample data</span>
         <span v-else-if="DEMO" class="chip" :title="`Results saved from an emulated lab (virtual radios in a Linux VM), last run ${formatTime(summary.data?.last_finished ?? null)}`">Read-only demo</span>
+        <template v-if="!DEMO && auth.checked">
+          <span v-if="auth.user" class="account">
+            <span class="who" :title="`Logged in as ${auth.user.email}`"><svg viewBox="0 0 24 24" aria-hidden="true"><path :d="ICON.user" /></svg><span class="email">{{ auth.user.email }}</span></span>
+            <button type="button" class="textbtn" @click="auth.logout()">Log out</button>
+          </span>
+          <RouterLink v-else-if="route.path !== '/login'" :to="{ path: '/login', query: { next: route.fullPath } }" class="textbtn">Log in</RouterLink>
+        </template>
         <button type="button" class="iconbtn" :aria-label="THEME_LABEL[theme]" :title="THEME_LABEL[theme]" @click="theme = NEXT[theme]">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path :d="ICON[theme === 'auto' ? 'auto' : theme === 'light' ? 'sun' : 'moon']" /></svg>
         </button>
@@ -123,6 +133,12 @@ svg { width: 20px; height: 20px; flex: none; fill: none; stroke: currentColor; s
 .chip.warn { color: var(--skip); background: var(--skip-bg); border-color: transparent; }
 .iconbtn { background: var(--card); color: var(--ink); border: 1px solid var(--line); min-height: 36px; width: 36px; border-radius: 999px; padding: 0; display: grid; place-items: center; }
 .iconbtn:hover { background: var(--bg); }
+.account { display: inline-flex; align-items: center; gap: 8px; min-width: 0; }
+.who { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); min-width: 0; }
+.who svg { width: 18px; height: 18px; }
+.email { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 200px; }
+.textbtn { font: inherit; font-size: 13px; font-weight: 600; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; min-height: 36px; display: inline-flex; align-items: center; text-decoration: none !important; white-space: nowrap; }
+.textbtn:hover { background: var(--hover); }
 main { padding: 28px 28px 48px; max-width: 1600px; width: 100%; }
 
 /* Phones: the sidebar becomes a bottom tab bar. */
@@ -135,6 +151,7 @@ main { padding: 28px 28px 48px; max-width: 1600px; width: 100%; }
   .navitem, .collapsed .navitem { flex-direction: column; gap: 2px; font-size: 11px; padding: 6px 2px; justify-content: center; text-align: center; min-height: 52px; }
   .collapsed .label { display: inline; }
   .topbar { padding: 0 16px; }
+  .email { display: none; }
   main { padding: 16px 16px 88px; }
 }
 </style>

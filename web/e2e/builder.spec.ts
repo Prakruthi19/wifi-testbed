@@ -116,3 +116,19 @@ test('the demo says saving by name needs the lab API', async ({ page }) => {
   await page.getByRole('button', { name: 'Next: Review' }).click()
   await expect(page.getByLabel('Save as')).toHaveCount(0)
 })
+
+test('the tab title stays the app name on every page, with the logo as its icon', async ({ page }) => {
+  for (const path of ['/#/sites', '/#/runs', '/#/builder', '/#/login']) {
+    await page.goto(path)
+    await expect(page).toHaveTitle('Wi-Fi Test Lab')
+  }
+  await expect(page.locator('link[rel="icon"]')).toHaveAttribute('href', /favicon\.svg$/)
+  expect((await page.request.get('favicon.svg')).ok()).toBe(true)
+})
+
+test('the demo login page explains that logging in needs the lab', async ({ page }) => {
+  await page.goto('/#/login')
+  await expect(page.getByRole('heading', { name: 'Log in' })).toBeVisible()
+  await expect(page.getByText(/Logging in needs the lab API/)).toBeVisible()
+  await expect(page.getByLabel('Password')).toHaveCount(0)
+})
