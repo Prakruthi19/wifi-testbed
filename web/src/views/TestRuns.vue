@@ -5,7 +5,8 @@ import { useRouter } from 'vue-router'
 import { formatTime } from '../api'
 import { PAGE, useRuns } from '../stores/runs'
 import { SUITES } from '../describe'
-import { formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
+import { failedCount, formatDuration, runSentence, testHistories, testTime, tone, totalCount } from '../runs'
+import type { RunSummary } from '../api'
 import { useJobs } from '../stores/jobs'
 import { useSummary } from '../stores/summary'
 import CountsBar from '../components/CountsBar.vue'
@@ -41,7 +42,55 @@ const filtered = computed(() => Boolean(suite.value || onlyFailing.value))
 // Filters run on the loaded runs only, so a filtered view counts what it has.
 const total = computed(() => (filtered.value ? shown.value.length : Math.max(summary.data?.runs ?? 0, runs.value.length)))
 const pages = computed(() => Math.max(1, Math.ceil(total.value / ROWS)))
-const pageRows = computed(() => shown.value.slice((page.value - 1) * ROWS, page.value * ROWS))
+// Sorting happens here in the page. To sort across every run, not just the 10 on screen, picking a
+// sort first loads the remaining run summaries (one request; they are small) and sorts them all.
+type SortKey = 'result' | 'finished' | 'suites' | 'summary' | 'tests' | 'time'
+const COLUMNS: { key: SortKey; label: string; hideSm?: boolean }[] = [
+  { key: 'result', label: 'Result' }, { key: 'finished', label: 'Finished' }, { key: 'suites', label: 'Suites', hideSm: true },
+  { key: 'summary', label: 'Summary' }, { key: 'tests', label: 'Tests' }, { key: 'time', label: 'Test time', hideSm: true },
+]
+const sort = ref<{ key: SortKey; dir: 'asc' | 'desc' } | null>(null)
+const RESULT_LABEL = { bad: 'Failed', good: 'Passed', skip: 'Skipped' } as const
+const suiteText = (r: RunSummary) => r.suites.map((x) => SUITES[x] ?? x).join(', ')
+// The value each column sorts by. Test time is known only for runs loaded in full; others have none.
+function sortValue(r: RunSummary, key: SortKey): string | number | null {
+  switch (key) {
+    case 'result': return RESULT_LABEL[tone(r.counts)]
+    case 'finished': return r.id // ids are UTC timestamps, so text order is time order
+    case 'suites': return suiteText(r)
+    case 'summary': return failedCount(r.counts) // how many tests failed
+    case 'tests': return totalCount(r.counts) ? r.counts.passed / totalCount(r.counts) : 0 // share passed
+    case 'time': return details.value[r.id] ? testTime(details.value[r.id]) : null
+  }
+}
+const sorted = computed(() => {
+  const s = sort.value
+  if (!s) return shown.value // newest first, as the server sends them
+  const sign = s.dir === 'asc' ? 1 : -1
+  return [...shown.value].sort((a, b) => {
+    const x = sortValue(a, s.key), y = sortValue(b, s.key)
+    if (x === null || y === null) return x === y ? 0 : x === null ? 1 : -1 // unknown values go last
+    const c = x < y ? -1 : x > y ? 1 : 0
+    return c ? sign * c : a.id < b.id ? 1 : -1 // ties: newest first
+  })
+})
+// Clicking the arrow that is already on turns sorting off (back to newest first).
+async function setSort(key: SortKey, dir: 'asc' | 'desc') {
+  sort.value = sort.value?.key === key && sort.value.dir === dir ? null : { key, dir }
+  page.value = 1
+  if (sort.value && store.hasMore) await store.loadUntil(Math.max(total.value, runs.value.length + 1000))
+}
+// Phones hide the column headers (rows become cards), so the same sort is offered as a menu there.
+const sortChoice = computed({
+  get: () => (sort.value ? `${sort.value.key}:${sort.value.dir}` : ''),
+  set: (v: string) => {
+    if (!v) { if (sort.value) setSort(sort.value.key, sort.value.dir); return }
+    const [key, dir] = v.split(':') as [SortKey, 'asc' | 'desc']
+    setSort(key, dir)
+  },
+})
+const ariaSort = (key: SortKey) => (sort.value?.key === key ? (sort.value.dir === 'asc' ? 'ascending' : 'descending') : 'none')
+const pageRows = computed(() => sorted.value.slice((page.value - 1) * ROWS, page.value * ROWS))
 const from = computed(() => (total.value ? (page.value - 1) * ROWS + 1 : 0))
 const to = computed(() => Math.min(page.value * ROWS, total.value))
 const canNext = computed(() => page.value < pages.value || (filtered.value && store.hasMore))
@@ -136,6 +185,15 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
           </select>
         </label>
         <label class="check"><input v-model="onlyFailing" type="checkbox" /> Only runs with failures</label>
+        <label v-if="tab === 'runs'" class="phone-sort">Sort
+          <select v-model="sortChoice">
+            <option value="">Newest first</option>
+            <template v-for="c in COLUMNS" :key="c.key">
+              <option :value="`${c.key}:asc`">{{ c.label }} ↑</option>
+              <option :value="`${c.key}:desc`">{{ c.label }} ↓</option>
+            </template>
+          </select>
+        </label>
       </div>
     </div>
 
@@ -144,7 +202,16 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
     <p v-else-if="!shown.length" class="muted pad">{{ runs.length ? "No runs match." : "No runs yet. Start one, and it shows up here when it finishes." }}</p>
 
     <table v-else-if="tab === 'runs'" class="stack runs" aria-label="Runs">
-      <thead><tr><th>Result</th><th>Finished</th><th>Suites</th><th>Summary</th><th>Tests</th><th>Test time</th></tr></thead>
+      <thead><tr>
+        <th v-for="c in COLUMNS" :key="c.key" :aria-sort="ariaSort(c.key)" :class="{ 'hide-sm': c.hideSm }">
+          <span class="th">{{ c.label }}
+            <span class="sorter">
+              <button type="button" :class="{ on: sort?.key === c.key && sort.dir === 'asc' }" :aria-label="`Sort by ${c.label}, ascending`" :aria-pressed="sort?.key === c.key && sort.dir === 'asc'" @click="setSort(c.key, 'asc')">▲</button>
+              <button type="button" :class="{ on: sort?.key === c.key && sort.dir === 'desc' }" :aria-label="`Sort by ${c.label}, descending`" :aria-pressed="sort?.key === c.key && sort.dir === 'desc'" @click="setSort(c.key, 'desc')">▼</button>
+            </span>
+          </span>
+        </th>
+      </tr></thead>
       <tbody>
         <tr v-for="r in pageRows" :key="r.id" :class="tone(r.counts)" @click="open(r.id)">
           <td data-label="Result"><span class="status" :class="tone(r.counts)">{{ tone(r.counts) === 'bad' ? 'Failed' : tone(r.counts) === 'good' ? 'Passed' : 'Skipped' }}</span></td>
@@ -221,6 +288,13 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .runs tbody tr { cursor: pointer; }
 .runs tbody tr:hover { background: var(--bg); }
 .summary { max-width: 360px; }
+.th { display: inline-flex; align-items: center; gap: 6px; }
+.phone-sort { display: none !important; }
+@media (max-width: 640px) { .phone-sort { display: flex !important; } }
+.sorter { display: inline-flex; flex-direction: column; gap: 1px; }
+.sorter button { min-height: 0; padding: 0 3px; font-size: 8px; line-height: 1.1; background: none; color: var(--muted); border: 0; border-radius: 2px; opacity: .55; }
+.sorter button:hover { color: var(--accent); background: var(--hover); opacity: 1; }
+.sorter button.on { color: var(--accent); opacity: 1; }
 .tests { display: flex; align-items: center; gap: 10px; min-width: 150px; }
 .tests :deep(.bar) { flex: 1; }
 .status { display: inline-block; padding: 2px 8px; font-size: 12px; font-weight: 600; border-radius: var(--radius-sm); }
