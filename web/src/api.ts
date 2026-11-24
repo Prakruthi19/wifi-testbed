@@ -79,6 +79,7 @@ export const DEMO = import.meta.env.VITE_DEMO === '1'
 
 // A saved network plan, as listed (no body) and as opened (with the plan in the download file format).
 export interface SavedPlan { id: number; name: string; home: string; aps: number; created: string; updated: string }
+export interface User { email: string; client: string }
 export interface SavedPlanFull extends SavedPlan { plan: unknown }
 export class ApiError extends Error {
   constructor(public status: number, message: string) { super(message) }
@@ -140,6 +141,15 @@ export const api = {
     const body = await res.json()
     if (!res.ok) throw new Error(body.detail ?? `${res.status} ${res.statusText}`)
     return body as Job
+  },
+
+  // Logging in sets an HttpOnly session cookie: this code never sees the token, the browser sends it.
+  auth: {
+    me: async (): Promise<User | null> => {
+      try { return await send<User>('GET', '/auth/me') } catch (e) { if (e instanceof ApiError && e.status === 401) return null; throw e }
+    },
+    login: (email: string, password: string) => send<User>('POST', '/auth/login', { email, password }),
+    logout: () => send<void>('POST', '/auth/logout'),
   },
 
   // Saved plans live in the API's SQLite database, so the read-only demo has none.

@@ -37,7 +37,9 @@ def lab(tmp_path):
 
 
 def client(lab, root=False):
-    return TestClient(api.create_app(lab / "reports", lab / "inventory.yaml", is_root=lambda: root))
+    # localhost, because the session cookie is Secure (HTTPS only) everywhere else.
+    return TestClient(api.create_app(lab / "reports", lab / "inventory.yaml", is_root=lambda: root),
+                      base_url="http://localhost")
 
 
 def test_summary_runs_and_tests(lab):
@@ -196,8 +198,20 @@ def _plan(name="AP 1", **ap):
          "xMetres": 4.5, "yMetres": 3.0, **ap}]}
 
 
-def test_plans_save_list_open_and_delete(lab):
+def logged_in(lab, email="ana@example.com", client_slug="default"):
+    """A test client with a user in `client_slug`, already logged in."""
     c = client(lab)
+    store = api.PlanStore(lab / "reports" / "plans.db")
+    if store.client_id(client_slug) is None:
+        with store._connect() as db:
+            db.execute("INSERT INTO clients (slug, name, created) VALUES (?, ?, 'now')", (client_slug, client_slug))
+    c.app.state.auth.add_user(email, "correct horse", store.client_id(client_slug))
+    assert c.post("/api/auth/login", json={"email": email, "password": "correct horse"}).status_code == 200
+    return c
+
+
+def test_plans_save_list_open_and_delete(lab):
+    c = logged_in(lab)
     assert c.get("/api/plans").json() == []
     r = c.post("/api/plans", json={"name": "  Smith house ", "plan": _plan()})
     assert r.status_code == 201
@@ -211,7 +225,7 @@ def test_plans_save_list_open_and_delete(lab):
 
 
 def test_plans_same_name_needs_replace(lab):
-    c = client(lab)
+    c = logged_in(lab)
     first = c.post("/api/plans", json={"name": "Office", "plan": _plan()}).json()
     r = c.post("/api/plans", json={"name": "office", "plan": _plan("Hall AP")})  # names ignore case
     assert r.status_code == 409 and "already exists" in r.json()["detail"]
@@ -229,17 +243,93 @@ def test_plans_same_name_needs_replace(lab):
     {"accessPoints": [{**_plan()["accessPoints"][0], "xMetres": 99}]},    # outside the house
 ])
 def test_plans_reject_bad_input(lab, bad):
-    r = client(lab).post("/api/plans", json={"name": "x", "plan": {**_plan(), **bad}})
+    r = logged_in(lab).post("/api/plans", json={"name": "x", "plan": {**_plan(), **bad}})
     assert r.status_code == 422
 
 
 def test_plans_are_kept_per_client(lab):
+    ana = logged_in(lab)
+    mine = ana.post("/api/plans", json={"name": "Mine", "plan": _plan()}).json()
+    bo = logged_in(lab, "bo@acme.example", "acme")
+    assert bo.get("/api/plans").json() == []                         # another client sees none of ours
+    assert bo.get(f"/api/plans/{mine['id']}").status_code == 404     # not even by guessing the id
+    assert bo.delete(f"/api/plans/{mine['id']}").status_code == 404
+    assert bo.get("/api/plans?client=default").json() == []          # the URL cannot pick the client
+    assert bo.post("/api/plans", json={"name": "Mine", "plan": _plan()}).status_code == 201  # same name is fine there
+    assert len(ana.get("/api/plans").json()) == 1
+
+
+# -- login ---------------------------------------------------------------------------------------
+def test_plans_need_a_login(lab):
     c = client(lab)
-    c.post("/api/plans", json={"name": "Mine", "plan": _plan()})
-    assert c.get("/api/plans?client=nobody").status_code == 404
+    assert c.get("/api/plans").status_code == 401
+    assert c.post("/api/plans", json={"name": "x", "plan": _plan()}).status_code == 401
+    assert c.get("/api/auth/me").status_code == 401
+
+
+def test_login_sets_a_safe_cookie_and_logout_ends_it(lab):
+    c = logged_in(lab)
+    assert c.get("/api/auth/me").json() == {"email": "ana@example.com", "client": "default"}
+    token = c.cookies.get("session")
     store = api.PlanStore(lab / "reports" / "plans.db")
     with store._connect() as db:
-        db.execute("INSERT INTO clients (slug, name, created) VALUES ('acme', 'Acme', 'now')")
-    assert c.get("/api/plans?client=acme").json() == []          # another client sees none of ours
-    c.post("/api/plans?client=acme", json={"name": "Mine", "plan": _plan()})  # same name is fine there
-    assert len(c.get("/api/plans").json()) == 1
+        stored = [r[0] for r in db.execute("SELECT token_hash FROM sessions")]
+        pw = db.execute("SELECT password_hash FROM users").fetchone()[0]
+    assert token not in stored and len(stored) == 1                  # only the token's hash is kept
+    assert pw.startswith("scrypt$") and "correct horse" not in pw    # and only the password's hash
+    r = c.post("/api/auth/login", json={"email": "ANA@example.com ", "password": "correct horse"})
+    header = r.headers["set-cookie"].lower()
+    assert "httponly" in header and "samesite=lax" in header and "path=/api" in header
+    assert c.cookies.get("session") != token                         # a new token on every login
+    assert c.post("/api/auth/logout").status_code == 204
+    assert c.get("/api/plans").status_code == 401
+    old = client(lab)
+    old.cookies.set("session", token)
+    assert old.get("/api/plans").status_code == 401                  # a copied old token is useless too
+
+
+def test_cookie_is_secure_off_localhost(lab):
+    c = TestClient(api.create_app(lab / "reports", lab / "inventory.yaml"), base_url="http://lab.example")
+    api.PlanStore(lab / "reports" / "plans.db")
+    c.app.state.auth.add_user("ana@example.com", "correct horse", 1)
+    r = c.post("/api/auth/login", json={"email": "ana@example.com", "password": "correct horse"})
+    assert "secure" in r.headers["set-cookie"].lower()
+
+
+def test_wrong_logins_look_the_same_and_are_limited(lab):
+    c = logged_in(lab)
+    wrong_pw = c.post("/api/auth/login", json={"email": "ana@example.com", "password": "nope"})
+    no_user = c.post("/api/auth/login", json={"email": "who@example.com", "password": "nope"})
+    assert wrong_pw.status_code == no_user.status_code == 401
+    assert wrong_pw.json() == no_user.json() == {"detail": "Email or password is wrong."}
+    for _ in range(4):
+        c.post("/api/auth/login", json={"email": "ana@example.com", "password": "nope"})
+    r = c.post("/api/auth/login", json={"email": "ana@example.com", "password": "correct horse"})
+    assert r.status_code == 429 and "Retry-After" in r.headers  # locked even with the right password
+
+
+def test_sessions_expire_when_idle(lab):
+    from testbed import auth
+    clock = [1000.0]
+    a = auth.Auth(lab / "plans.db", now=lambda: clock[0])
+    api.PlanStore(lab / "plans.db")
+    a.add_user("ana@example.com", "correct horse", 1)
+    t = a.login("ana@example.com", "correct horse")
+    clock[0] += auth.IDLE_S - 1
+    assert a.user(t)["email"] == "ana@example.com"   # used in time: still alive, and the idle timer restarts
+    clock[0] += auth.IDLE_S - 1
+    assert a.user(t) is not None
+    clock[0] += auth.IDLE_S + 1
+    assert a.user(t) is None                         # idle too long
+    t = a.login("ana@example.com", "correct horse")
+    for _ in range(auth.MAX_AGE_S // (auth.IDLE_S - 60) + 1):
+        clock[0] += auth.IDLE_S - 60
+        a.user(t)
+    assert a.user(t) is None                         # kept busy, but past the 8 hour limit
+
+
+def test_add_user_refuses_short_passwords(lab):
+    from testbed import auth
+    api.PlanStore(lab / "plans.db")
+    with pytest.raises(ValueError):
+        auth.Auth(lab / "plans.db").add_user("ana@example.com", "short", 1)
