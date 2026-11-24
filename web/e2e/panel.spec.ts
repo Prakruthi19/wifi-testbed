@@ -216,3 +216,33 @@ test('the runs list shows every page number and fetches only the runs a page nee
   await expect(rows).toHaveCount(10)
   expect(listCalls - before).toBe(1)
 })
+
+test('the arrows beside each column sort all runs up and down, not just the page on screen', async ({ page, isMobile }) => {
+  // 25 runs; only the oldest one (on page 3) has failures, 5 of 10.
+  const runs = Array.from({ length: 25 }, (_, i) => ({
+    id: `2026${String(1000 - i).padStart(4, '0')}T000000Z`, finished: '2026-10-01T00:00:00+00:00',
+    counts: { passed: i === 24 ? 5 : 10, failed: i === 24 ? 5 : 0, error: 0, skipped: 0 }, suites: ['failures'],
+  }))
+  await page.route('**/demo/runs.json', (r) => r.fulfill({ json: runs }))
+  await page.route('**/demo/summary.json', async (r) => {
+    const res = await r.fetch(); return r.fulfill({ response: res, json: { ...(await res.json()), runs: 25 } })
+  })
+  await page.goto('/#/runs')
+  const table = page.getByRole('table', { name: 'Runs' })
+  const first = table.locator('tbody tr').first()
+  await expect(first).toContainText('All 10 passed')
+  if (isMobile) { // phones hide the column headers, so the same sort is a menu
+    await page.locator('.phone-sort select').selectOption('summary:desc')
+    await expect(first).toContainText('5 of 10 failed')
+    return
+  }
+  await table.getByRole('button', { name: 'Sort by Summary, descending' }).click()
+  await expect(first).toContainText('5 of 10 failed') // came from page 3
+  await expect(table.getByRole('columnheader', { name: /Summary/ })).toHaveAttribute('aria-sort', 'descending')
+  await table.getByRole('button', { name: 'Sort by Summary, ascending' }).click()
+  await expect(first).toContainText('All 10 passed')
+  await table.getByRole('button', { name: 'Sort by Result, ascending' }).click() // Failed < Passed
+  await expect(first).toContainText('Failed')
+  await table.getByRole('button', { name: 'Sort by Result, ascending' }).click() // same arrow again: off
+  await expect(table.getByRole('columnheader', { name: /Result/ })).toHaveAttribute('aria-sort', 'none')
+})
