@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import InfoTip from '../components/InfoTip.vue'
+import { Pager } from '../components/ui'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatTime } from '../api'
@@ -96,19 +97,6 @@ const ariaSort = (key: SortKey) => (sort.value?.key === key ? (sort.value.dir ==
 const pageRows = computed(() => sorted.value.slice((page.value - 1) * ROWS, page.value * ROWS))
 const from = computed(() => (total.value ? (page.value - 1) * ROWS + 1 : 0))
 const to = computed(() => Math.min(page.value * ROWS, total.value))
-const canNext = computed(() => page.value < pages.value || (filtered.value && store.hasMore))
-// Every page number up to 10 pages; beyond that first, last, and two pages either side of this one.
-const pageList = computed<(number | '…')[]>(() => {
-  const n = pages.value, p = page.value
-  if (n <= 10) return Array.from({ length: n }, (_, i) => i + 1)
-  const mid = [p - 2, p - 1, p, p + 1, p + 2].filter((x) => x > 1 && x < n)
-  const out: (number | '…')[] = [1]
-  if (mid[0] > 2) out.push('…')
-  out.push(...mid)
-  if (mid[mid.length - 1] < n - 1) out.push('…')
-  out.push(n)
-  return out
-})
 async function goTo(n: number) {
   if (n < 1) return
   if (filtered.value) { if (n > pages.value && store.hasMore) await store.loadMore() }
@@ -232,17 +220,9 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
       <ResultsGrid :runs="gridRuns" />
     </div>
 
-    <nav v-if="tab === 'runs' && !loading && !error && shown.length" class="pager" aria-label="Pages">
-      <span class="muted small">{{ from }}–{{ to }} of {{ total }}{{ filtered && store.hasMore ? '+' : '' }} runs<template v-if="filtered"> (filtered)</template></span>
-      <div class="pages">
-        <button type="button" class="pg" :disabled="page === 1" aria-label="Previous page" @click="goTo(page - 1)">‹ Prev</button>
-        <template v-for="(n, i) in pageList" :key="i">
-          <span v-if="n === '…'" class="gap" aria-hidden="true">…</span>
-          <button v-else type="button" class="pg num" :aria-label="`Page ${n}`" :aria-current="n === page ? 'page' : undefined" :disabled="store.loadingMore" @click="goTo(n)">{{ n }}</button>
-        </template>
-        <button type="button" class="pg" :disabled="!canNext || store.loadingMore" aria-label="Next page" @click="goTo(page + 1)">{{ store.loadingMore ? 'Loading…' : 'Next ›' }}</button>
-      </div>
-    </nav>
+    <Pager v-if="tab === 'runs' && !loading && !error && shown.length" :page="page" :pages="pages" :has-more="filtered && store.hasMore" :busy="store.loadingMore" @go="goTo">
+      {{ from }}–{{ to }} of {{ total }}{{ filtered && store.hasMore ? '+' : '' }} runs<template v-if="filtered"> (filtered)</template>
+    </Pager>
   </div>
 </template>
 
@@ -276,16 +256,6 @@ const open = (id: string) => router.push({ name: 'run', params: { id } })
 .filters select { min-height: 34px; padding: 4px 8px; }
 .check input { width: 16px; height: 16px; }
 .pad { padding: 16px; margin: 0; }
-.pager { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 12px; padding: 12px 16px; border-top: 1px solid var(--line); }
-.pages { display: flex; flex-wrap: wrap; gap: 4px; }
-/* Pager buttons use theme tokens only (--card, --ink, --line, --hover, --accent), so light and dark
-   each get their own hover colour from style.css instead of one hard-coded shade. */
-.pg { min-height: 32px; padding: 4px 10px; font-size: 13px; background: var(--card); color: var(--ink); border: 1px solid var(--line); }
-.pg.num { min-width: 34px; }
-.pg:hover:not(:disabled) { background: var(--hover); color: var(--accent); border-color: var(--accent); }
-.pg[aria-current='page'], .pg[aria-current='page']:hover { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
-.pg:disabled:not([aria-current]) { opacity: .45; cursor: default; }
-.gap { align-self: center; padding: 0 4px; color: var(--muted); }
 .error { margin: 16px; }
 
 .runs th { white-space: nowrap; padding: 10px 16px; background: var(--bg); border-bottom: 1px solid var(--line); font-size: 12px; text-transform: uppercase; letter-spacing: .03em; }

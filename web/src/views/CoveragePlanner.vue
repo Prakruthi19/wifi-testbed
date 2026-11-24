@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { BaseButton, ModelTag, SegmentedControl } from '../components/ui'
 import InfoTip from '../components/InfoTip.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import WalkChart, { type WalkSample } from '../components/WalkChart.vue'
@@ -306,23 +307,19 @@ function nudge(n: Node, e: KeyboardEvent) {
     <StatusBadge v-if="health" :status="health.status" />
     <span v-if="site?.simulated" class="simtag">Simulated site</span>
     <span v-if="site" class="muted">{{ site.area }}</span>
-    <span class="modeltag" :title="`Signal comes from a standard indoor formula: distance loss plus ${BAND_MODEL[band].wallDb} dB per wall on ${BAND_MODEL[band].label}. The lab's radios are emulated.`">
+    <ModelTag :title="`Signal comes from a standard indoor formula: distance loss plus ${BAND_MODEL[band].wallDb} dB per wall on ${BAND_MODEL[band].label}. The lab's radios are emulated.`">
       This is a model, not a measurement
-    </span>
+    </ModelTag>
   </div>
 
   <div class="layout">
       <section class="card plan">
         <div class="toolbar">
           <span class="seglabel" id="floor-band">Floor colours:</span>
-          <div role="group" aria-labelledby="floor-band" class="segs">
-            <button v-for="b in (['2.4', '5'] as Band[])" :key="b" type="button" class="seg" :aria-pressed="band === b" @click="band = b">
-              {{ BAND_MODEL[b].label }}
-            </button>
-          </div>
+          <SegmentedControl v-model="band" labelledby="floor-band" :options="(['2.4', '5'] as Band[]).map((b) => ({ value: b, label: BAND_MODEL[b].label }))" />
           <label class="check"><input v-model="showHeat" type="checkbox" /> Signal colours</label>
           <span class="stat"><b>{{ coverage }}%</b> of the house good for video calls</span>
-          <button type="button" class="seg" @click="reset">Reset</button>
+          <BaseButton variant="secondary" size="sm" @click="reset">Reset</BaseButton>
         </div>
 
         <div class="stage">
@@ -518,12 +515,10 @@ function nudge(n: Node, e: KeyboardEvent) {
   <section class="card walkcard" aria-labelledby="walk-h">
         <div class="walkhead">
           <h2 id="walk-h">Walk the phone <InfoTip :text="`The phone walks through every room at ${WALK_MPS} m/s. Like a real phone it is sticky: it keeps its access point until the signal drops below ${ROAM_BELOW} dBm and another one is at least ${ROAM_MARGIN} dB stronger. A simplified, typical rule; real phones differ.`" /></h2>
-          <button type="button" class="primary" @click="startWalk">
+          <BaseButton @click="startWalk">
             {{ walk.state === 'walking' ? '❚❚ Pause' : walk.state === 'paused' ? '▶ Keep walking' : walk.state === 'done' ? '↺ Walk again' : '▶ Walk the phone' }}
-          </button>
-          <div role="group" aria-label="Walking speed" class="segs">
-            <button v-for="s in [1, 3, 10]" :key="s" type="button" class="seg" :aria-pressed="speed === s" @click="speed = s">{{ s }}×</button>
-          </div>
+          </BaseButton>
+          <SegmentedControl v-model="speed" label="Walking speed" :options="[1, 3, 10].map((s) => ({ value: s, label: `${s}×` }))" />
         </div>
 
         <div class="now" aria-live="polite">
@@ -561,13 +556,9 @@ function nudge(n: Node, e: KeyboardEvent) {
 .bottom { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
 .layout .card, .bottom > .card { margin: 0; }
 .walkcard { margin-top: 16px; }
-.modeltag { font-size: 12px; font-weight: 600; border: 1px solid var(--skip); background: var(--skip-bg); border-radius: var(--radius-sm); padding: 1px 8px; cursor: help; }
 @media (max-width: 960px) { .layout, .bottom { grid-template-columns: 1fr; } }
 .toolbar { display: flex; flex-wrap: wrap; gap: 8px 16px; align-items: center; margin-bottom: 10px; }
 .seglabel { font-size: 14px; color: var(--muted); }
-.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
-.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 .check { display: inline-flex; align-items: center; gap: 6px; font-size: 14px; }
 .check input { width: 18px; height: 18px; }
 .stat { order: 3; flex-basis: 100%; font-size: 14px; }

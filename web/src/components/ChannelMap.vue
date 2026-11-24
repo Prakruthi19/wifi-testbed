@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SegmentedControl } from './ui'
 import { computed, ref } from 'vue'
 
 // Where each access point sits in the radio spectrum, drawn from its configured channel.
@@ -71,18 +72,7 @@ const info = computed(() => props.aps.find((a) => a.name === hovered.value) ?? n
 
 <template>
   <div class="viz-root">
-    <div class="controls" role="group" aria-label="Band">
-      <button
-        v-for="b in present"
-        :key="b"
-        type="button"
-        class="seg"
-        :aria-pressed="band === b"
-        @click="band = b"
-      >
-        {{ BANDS[b].label }}
-      </button>
-    </div>
+    <SegmentedControl v-model="band" class="controls" label="Band" :options="present.map((b) => ({ value: b, label: BANDS[b].label }))" />
 
     <svg :viewBox="`0 0 ${W} ${H}`" role="img" :aria-label="`Channel map, ${BANDS[band].label}`">
       <line :x1="PAD.l" :x2="W - PAD.r" :y1="H - PAD.b" :y2="H - PAD.b" class="axis" />
@@ -125,9 +115,7 @@ const info = computed(() => props.aps.find((a) => a.name === hovered.value) ?? n
 </template>
 
 <style scoped>
-.controls { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; margin-bottom: 10px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
-.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
+.controls { margin-bottom: 10px; }
 svg { width: 100%; height: auto; display: block; }
 .axis { stroke: var(--muted); stroke-width: 1; }
 .grid { stroke: var(--line); stroke-dasharray: 2 4; }

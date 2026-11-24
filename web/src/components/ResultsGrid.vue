@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { SegmentedControl } from './ui'
 import { computed, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { formatTime, type Outcome, type RunDetail } from '../api'
@@ -58,11 +59,9 @@ const groupSummary = (g: { rows: unknown[]; changed: number; failing: number }) 
 <template>
   <div class="history">
     <div class="bar">
-      <div role="group" aria-label="Show" class="segs">
-        <button v-for="f in FILTERS" :key="f.key" type="button" class="seg" :aria-pressed="show === f.key" @click="show = f.key">
-          {{ f.label }} <span class="n">{{ counts[f.key] }}</span>
-        </button>
-      </div>
+      <SegmentedControl v-model="show" label="Show" :options="FILTERS.map((f) => ({ value: f.key, label: f.label }))">
+        <template #option="{ option }">{{ option.label }} <span class="n">{{ counts[option.value] }}</span></template>
+      </SegmentedControl>
       <div class="legend" aria-hidden="true">
         <span><i class="cell passed" /> passed</span>
         <span><i class="cell failed" /> failed</span>
@@ -131,10 +130,6 @@ const groupSummary = (g: { rows: unknown[]; changed: number; failing: number }) 
 
 <style scoped>
 .bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 8px 16px; }
-.segs { display: inline-flex; gap: 2px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 2px; }
-.seg { background: none; color: var(--muted); border: 0; min-height: 32px; padding: 4px 12px; font-size: 13px; font-weight: 600; border-radius: var(--radius-sm); }
-
-.seg[aria-pressed='true'] { background: var(--card); color: var(--ink); box-shadow: 0 1px 2px rgb(15 23 42 / 0.15); }
 .n { font-weight: 400; color: var(--muted); margin-left: 2px; }
 .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; color: var(--muted); }
 .legend span { display: inline-flex; align-items: center; gap: 6px; }
