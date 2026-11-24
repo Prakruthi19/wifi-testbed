@@ -19,7 +19,6 @@ const NAV = [
   { to: '/coverage', label: 'Coverage', icon: 'coverage' },
   { to: '/builder', label: 'Builder', icon: 'builder' },
   { to: '/start', label: 'Start a run', icon: 'start' },
-  { to: '/kit', label: 'UI kit', icon: 'kit' },
 ] as const
 // One stroke path per icon, drawn on a 24 x 24 grid.
 const ICON: Record<string, string> = {
@@ -29,7 +28,6 @@ const ICON: Record<string, string> = {
   coverage: 'M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01',
   start: 'M7 4l12 8-12 8z',
   builder: 'M4 4h16v16H4zM4 12h7M11 4v16M15 13v6M12 16h6',
-  kit: 'M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM16.5 13a3.5 3.5 0 1 0 0 7 3.5 3.5 0 0 0 0-7z',
   collapse: 'M15 6l-6 6 6 6',
   sun: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
   moon: 'M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z',

@@ -6,7 +6,6 @@ import StartRun from './views/StartRun.vue'
 import CoveragePlanner from './views/CoveragePlanner.vue'
 import SitesOverview from './views/SitesOverview.vue'
 import NetworkBuilder from './views/NetworkBuilder.vue'
-import ComponentLibrary from './views/ComponentLibrary.vue'
 
 // Hash URLs (#/runs) so the static GitHub Pages build works without server-side routing.
 export const router = createRouter({
@@ -19,7 +18,6 @@ export const router = createRouter({
     { path: '/sites', name: 'sites', component: SitesOverview, meta: { title: 'Sites' } },
     { path: '/sites/:id', name: 'site', component: CoveragePlanner, props: true, meta: { title: 'Site' } },
     { path: '/builder', name: 'builder', component: NetworkBuilder, meta: { title: 'Network builder' } },
-    { path: '/kit', name: 'kit', component: ComponentLibrary, meta: { title: 'UI kit' } },
     { path: '/start', name: 'start', component: StartRun, meta: { title: 'Start a run' } },
   ],
 })
