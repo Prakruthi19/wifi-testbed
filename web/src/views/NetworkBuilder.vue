@@ -150,6 +150,7 @@ function toPlan(e: PointerEvent) {
 function grab(ap: PlanAp, e: PointerEvent) {
   b.selected = ap.id
   if (b.step === 1) b.step = 2 // on Check and Review, stay put so the numbers update as it moves
+  dragStart.value = Object.fromEntries(rooms.value.map((r) => [r.room, pct(r.good)]))
   b.beginDrag()
   dragging.value = ap.id
   ;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
@@ -225,6 +226,11 @@ function saveName(ap: PlanAp) {
 
 // -- step 3 and 4 ---------------------------------------------------------------------------
 const rooms = computed(() => roomCoverage(b.plan, band.value))
+const pct = (good: number) => Math.round(good * 100)
+// While dragging, each room shows how far it has moved from where the drag started (+12 / −8).
+const dragStart = ref<Record<string, number> | null>(null)
+const delta = (room: string, good: number) => (dragStart.value && room in dragStart.value ? pct(good) - dragStart.value[room] : 0)
+function endDrag() { dragging.value = null; dragStart.value = null }
 const overall = (x: Band) => {
   const r = roomCoverage(b.plan, x)
   return r.length ? Math.round((100 * r.reduce((s, c) => s + c.good, 0)) / r.length) : 0
@@ -284,7 +290,7 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
           <rect v-for="r in home.rooms" :key="r.name" :x="r.x" :y="r.y" :width="r.w" :height="r.h" :fill="r.floor === 'carpet' ? 'var(--floor-carpet)' : `url(#nb-${r.floor})`" />
         </svg>
         <canvas v-show="showHeat" ref="canvas" aria-hidden="true" />
-        <svg ref="svg" :viewBox="`0 0 ${W} ${H}`" role="group" aria-label="Access points on the plan. Tab to one and use the arrow keys to move it." @pointermove="drag" @pointerup="dragging = null" @pointercancel="dragging = null">
+        <svg ref="svg" :viewBox="`0 0 ${W} ${H}`" role="group" aria-label="Access points on the plan. Tab to one and use the arrow keys to move it." @pointermove="drag" @pointerup="endDrag" @pointercancel="endDrag">
           <line v-for="(w, i) in home.walls" :key="i" :x1="w[0]" :y1="w[1]" :x2="w[2]" :y2="w[3]" class="wall" />
           <text v-for="r in home.rooms" :key="r.name" :x="r.lx" :y="r.ly" class="roomname">{{ r.name }}</text>
           <g
@@ -411,7 +417,10 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
           <tbody>
             <tr v-for="r in rooms" :key="r.room">
               <td>{{ r.room }}</td>
-              <td><span class="meter"><i :style="{ width: Math.round(r.good * 100) + '%' }" :class="{ low: r.good < 0.8 }" /></span><span class="pct">{{ Math.round(r.good * 100) }}%</span></td>
+              <td>
+                <span class="meter"><i :style="{ width: pct(r.good) + '%' }" :class="{ low: r.good < 0.8 }" /></span><span class="pct">{{ pct(r.good) }}%</span>
+                <span v-if="delta(r.room, r.good)" class="delta" :class="delta(r.room, r.good) > 0 ? 'up' : 'down'">{{ delta(r.room, r.good) > 0 ? '▲ +' : '▼ ' }}{{ delta(r.room, r.good) }}</span>
+              </td>
               <td>{{ r.by ?? '—' }}</td>
             </tr>
           </tbody>
@@ -548,8 +557,13 @@ onUnmounted(() => { window.removeEventListener('keydown', onKey); cancelAnimatio
 .rooms caption { text-align: left; padding-bottom: 6px; }
 .rooms th { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); padding: 6px 8px; border-bottom: 1px solid var(--line); }
 .rooms td { padding: 8px; border-bottom: 1px solid var(--line); }
-.meter { display: inline-block; width: 70px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-right: 8px; vertical-align: middle; }
-.meter i { display: block; height: 100%; background: var(--pass); }
+.meter { display: inline-block; width: 90px; height: 6px; background: var(--line); border-radius: 3px; overflow: hidden; margin-right: 8px; vertical-align: middle; }
+.meter i { display: block; height: 100%; background: var(--pass); transition: width .25s ease-out, background-color .25s; }
+.pct { display: inline-block; min-width: 3.2em; font-variant-numeric: tabular-nums; }
+.delta { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.delta.up { color: var(--pass); }
+.delta.down { color: var(--fail); }
+@media (prefers-reduced-motion: reduce) { .meter i { transition: none; } }
 .meter i.low { background: var(--skip); }
 .kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-bottom: 14px; }
 .kpis div { border: 1px solid var(--line); border-radius: var(--radius); padding: 10px 12px; }

@@ -133,7 +133,8 @@ test('the demo login page explains that logging in needs the lab', async ({ page
   await expect(page.getByLabel('Password')).toHaveCount(0)
 })
 
-test('dragging an access point on the Check step updates the room table as it moves', async ({ page }) => {
+test('dragging an access point on the Check step updates the room table as it moves', async ({ page, isMobile }) => {
+  test.skip(isMobile, 'page.mouse does not drag on a touch device; a touch drag was checked by hand')
   await page.goto('/#/builder')
   await page.getByRole('button', { name: 'Next: Access points' }).click()
   await page.getByRole('button', { name: '+ Add access point' }).click()
@@ -149,6 +150,8 @@ test('dragging an access point on the Check step updates the room table as it mo
   for (let i = 1; i <= 10; i++) await page.mouse.move(box.x + (plan.x + plan.width * 0.12 - box.x) * i / 10, box.y + (plan.y + plan.height * 0.85 - box.y) * i / 10)
   await expect(office).not.toHaveText(before)
   await expect(page.getByRole('button', { name: 'Check' })).toHaveAttribute('aria-current', 'step')
+  await expect(office.locator('.delta')).toHaveText(/^[▲▼]/) // the change since the drag started
   await page.mouse.up()
+  await expect(office.locator('.delta')).toHaveCount(0)
   await expect(office).not.toHaveText(before) // and it keeps the new value once let go
 })
