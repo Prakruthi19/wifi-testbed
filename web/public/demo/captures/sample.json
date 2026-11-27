@@ -1,0 +1,355 @@
+{
+ "id": "sample",
+ "source": "sample",
+ "status": "done",
+ "started": "2026-11-27T12:00:00+00:00",
+ "finished": "2026-11-27T12:00:02+00:00",
+ "error": null,
+ "bytes": 3527,
+ "seconds": null,
+ "iface": null,
+ "filename": "sample_capture.pcap",
+ "decrypt": null,
+ "sample": true,
+ "result": {
+  "frames": 27,
+  "truncated": false,
+  "duration_s": 2.836,
+  "by_type": {
+   "management": 17,
+   "control": 0,
+   "data": 10,
+   "other": 0
+  },
+  "by_kind": [
+   {
+    "kind": "beacon",
+    "label": "Beacon",
+    "count": 7
+   },
+   {
+    "kind": "auth",
+    "label": "Authentication",
+    "count": 4
+   },
+   {
+    "kind": "dhcp",
+    "label": "DHCP",
+    "count": 4
+   },
+   {
+    "kind": "eapol",
+    "label": "EAPOL key (4-way handshake)",
+    "count": 4
+   },
+   {
+    "kind": "assoc_req",
+    "label": "Association request",
+    "count": 2
+   },
+   {
+    "kind": "assoc_resp",
+    "label": "Association response",
+    "count": 2
+   },
+   {
+    "kind": "dns",
+    "label": "DNS",
+    "count": 2
+   },
+   {
+    "kind": "probe_req",
+    "label": "Probe request",
+    "count": 1
+   },
+   {
+    "kind": "deauth",
+    "label": "Deauthentication",
+    "count": 1
+   }
+  ],
+  "retries": 1,
+  "retry_pct": 3.7,
+  "networks": [
+   {
+    "bssid": "02:00:00:00:00:00",
+    "ssid": "lab-open",
+    "beacons": 4,
+    "secured": false,
+    "signal_dbm": -40
+   },
+   {
+    "bssid": "02:00:00:00:03:00",
+    "ssid": "lab-wpa2",
+    "beacons": 3,
+    "secured": true,
+    "signal_dbm": -40
+   }
+  ],
+  "devices": [
+   {
+    "mac": "02:00:00:00:01:00",
+    "bssid": "02:00:00:00:00:00",
+    "ssid": "lab-open",
+    "stage": "success",
+    "stage_label": "Joined and got an address",
+    "summary": "joined, leased an address, resolved DNS",
+    "notes": [],
+    "frames_sent": 6,
+    "frames_received": 5,
+    "retries": 0,
+    "signal_dbm": -52,
+    "ip": "192.168.50.100",
+    "dns_names": [
+     "gw.lab"
+    ]
+   },
+   {
+    "mac": "02:00:00:00:02:00",
+    "bssid": "02:00:00:00:03:00",
+    "ssid": "lab-wpa2",
+    "stage": "key_exchange",
+    "stage_label": "Failed at 4-way handshake",
+    "summary": "client never sent message 4",
+    "notes": [
+     "deauth/disassoc reason codes: [15]",
+     "deauth from ap, reason 15 (frame #26)",
+     "retransmissions: 1 of 9 frames (11.1%)"
+    ],
+    "frames_sent": 3,
+    "frames_received": 6,
+    "retries": 0,
+    "signal_dbm": -67,
+    "ip": null,
+    "dns_names": []
+   }
+  ],
+  "disconnects": [
+   {
+    "no": 26,
+    "t": 2.736,
+    "kind": "deauth",
+    "from": "02:00:00:00:03:00",
+    "to": "02:00:00:00:02:00",
+    "sender": "ap",
+    "reason": 15,
+    "meaning": "4-way handshake timeout"
+   }
+  ],
+  "handshakes": [
+   {
+    "client": "02:00:00:00:02:00",
+    "bssid": "02:00:00:00:03:00",
+    "messages": [
+     1,
+     2,
+     3,
+     3
+    ],
+    "complete": false,
+    "duration_ms": 1020.0,
+    "retries": 1
+   }
+  ],
+  "dhcp": [
+   {
+    "no": 12,
+    "t": 0.306,
+    "type": "Discover",
+    "client": "02:00:00:00:01:00",
+    "ip": null,
+    "server": null
+   },
+   {
+    "no": 13,
+    "t": 0.356,
+    "type": "Offer",
+    "client": "02:00:00:00:01:00",
+    "ip": "192.168.50.100",
+    "server": "192.168.50.1"
+   },
+   {
+    "no": 14,
+    "t": 0.406,
+    "type": "Request",
+    "client": "02:00:00:00:01:00",
+    "ip": null,
+    "server": null
+   },
+   {
+    "no": 15,
+    "t": 0.456,
+    "type": "ACK",
+    "client": "02:00:00:00:01:00",
+    "ip": "192.168.50.100",
+    "server": "192.168.50.1"
+   }
+  ],
+  "dns": [
+   {
+    "no": 16,
+    "t": 0.466,
+    "response": false,
+    "name": "gw.lab",
+    "rcode": null,
+    "answer": null,
+    "from": "192.168.50.100",
+    "to": "192.168.50.1"
+   },
+   {
+    "no": 17,
+    "t": 0.476,
+    "response": true,
+    "name": "gw.lab",
+    "rcode": 0,
+    "answer": "192.168.50.1",
+    "from": "192.168.50.1",
+    "to": "192.168.50.100"
+   }
+  ],
+  "events": [
+   {
+    "no": 7,
+    "t": 0.216,
+    "kind": "probe_req",
+    "label": "Probe request",
+    "text": "#7 probe_req 02:00:00:00:01:00->ff:ff:ff:ff:ff:ff"
+   },
+   {
+    "no": 8,
+    "t": 0.226,
+    "kind": "auth",
+    "label": "Authentication",
+    "text": "#8 auth 02:00:00:00:01:00->02:00:00:00:00:00 alg=Open System seq=1 status=0"
+   },
+   {
+    "no": 9,
+    "t": 0.236,
+    "kind": "auth",
+    "label": "Authentication",
+    "text": "#9 auth 02:00:00:00:00:00->02:00:00:00:01:00 alg=Open System seq=2 status=0"
+   },
+   {
+    "no": 10,
+    "t": 0.246,
+    "kind": "assoc_req",
+    "label": "Association request",
+    "text": "#10 assoc_req 02:00:00:00:01:00->02:00:00:00:00:00"
+   },
+   {
+    "no": 11,
+    "t": 0.256,
+    "kind": "assoc_resp",
+    "label": "Association response",
+    "text": "#11 assoc_resp 02:00:00:00:00:00->02:00:00:00:01:00 status=0"
+   },
+   {
+    "no": 12,
+    "t": 0.306,
+    "kind": "dhcp",
+    "label": "DHCP",
+    "text": "#12 dhcp 02:00:00:00:01:00->ff:ff:ff:ff:ff:ff Discover"
+   },
+   {
+    "no": 13,
+    "t": 0.356,
+    "kind": "dhcp",
+    "label": "DHCP",
+    "text": "#13 dhcp 02:00:00:00:00:00->02:00:00:00:01:00 Offer"
+   },
+   {
+    "no": 14,
+    "t": 0.406,
+    "kind": "dhcp",
+    "label": "DHCP",
+    "text": "#14 dhcp 02:00:00:00:01:00->ff:ff:ff:ff:ff:ff Request"
+   },
+   {
+    "no": 15,
+    "t": 0.456,
+    "kind": "dhcp",
+    "label": "DHCP",
+    "text": "#15 dhcp 02:00:00:00:00:00->02:00:00:00:01:00 ACK"
+   },
+   {
+    "no": 16,
+    "t": 0.466,
+    "kind": "dns",
+    "label": "DNS",
+    "text": "#16 dns 02:00:00:00:01:00->02:00:00:00:00:00 query id=7 gw.lab"
+   },
+   {
+    "no": 17,
+    "t": 0.476,
+    "kind": "dns",
+    "label": "DNS",
+    "text": "#17 dns 02:00:00:00:00:00->02:00:00:00:01:00 response id=7 gw.lab rcode=0"
+   },
+   {
+    "no": 18,
+    "t": 0.676,
+    "kind": "auth",
+    "label": "Authentication",
+    "text": "#18 auth 02:00:00:00:02:00->02:00:00:00:03:00 alg=Open System seq=1 status=0"
+   },
+   {
+    "no": 19,
+    "t": 0.686,
+    "kind": "auth",
+    "label": "Authentication",
+    "text": "#19 auth 02:00:00:00:03:00->02:00:00:00:02:00 alg=Open System seq=2 status=0"
+   },
+   {
+    "no": 20,
+    "t": 0.696,
+    "kind": "assoc_req",
+    "label": "Association request",
+    "text": "#20 assoc_req 02:00:00:00:02:00->02:00:00:00:03:00"
+   },
+   {
+    "no": 21,
+    "t": 0.706,
+    "kind": "assoc_resp",
+    "label": "Association response",
+    "text": "#21 assoc_resp 02:00:00:00:03:00->02:00:00:00:02:00 status=0"
+   },
+   {
+    "no": 22,
+    "t": 0.716,
+    "kind": "eapol",
+    "label": "EAPOL key (4-way handshake)",
+    "text": "#22 eapol 02:00:00:00:03:00->02:00:00:00:02:00 M1"
+   },
+   {
+    "no": 23,
+    "t": 0.726,
+    "kind": "eapol",
+    "label": "EAPOL key (4-way handshake)",
+    "text": "#23 eapol 02:00:00:00:02:00->02:00:00:00:03:00 M2"
+   },
+   {
+    "no": 24,
+    "t": 0.736,
+    "kind": "eapol",
+    "label": "EAPOL key (4-way handshake)",
+    "text": "#24 eapol 02:00:00:00:03:00->02:00:00:00:02:00 M3"
+   },
+   {
+    "no": 25,
+    "t": 1.736,
+    "kind": "eapol",
+    "label": "EAPOL key (4-way handshake)",
+    "text": "#25 eapol 02:00:00:00:03:00->02:00:00:00:02:00 M3"
+   },
+   {
+    "no": 26,
+    "t": 2.736,
+    "kind": "deauth",
+    "label": "Deauthentication",
+    "text": "#26 deauth 02:00:00:00:03:00->02:00:00:00:02:00 reason=15"
+   }
+  ],
+  "events_total": 20,
+  "notes": []
+ }
+}
