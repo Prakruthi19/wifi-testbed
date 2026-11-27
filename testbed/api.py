@@ -9,6 +9,7 @@ Data comes from reports/history/*.json (written by every pytest run, see testbed
 reports/artifacts/<test>/ and lab/inventory.yaml. Passphrases are never sent to the browser.
 Run lists and details are served from an SQLite index of the history files (reports/runs.db, see
 testbed/runstore.py), and JSON answers carry an ETag so an unchanged answer costs a 304 and no body.
+Packet captures (POST /api/captures, then poll GET /api/captures/{id}) live in testbed/capturejobs.py.
 """
 
 from __future__ import annotations
@@ -39,6 +40,7 @@ from testbed import dashboard
 from testbed.runstore import RunStore
 from testbed.planstore import NameTaken, PlanStore
 from testbed.auth import Auth, TooManyTries
+from testbed.capturejobs import MAX_UPLOAD_BYTES, CaptureJobs
 
 # Suites the panel may start. android needs a phone on the host, rf needs real radios, unit is CI's job.
 STARTABLE = [s for s in dashboard.SUITES if s not in ("android", "rf", "unit")] + ["home"]
@@ -232,6 +234,28 @@ class StartRun(BaseModel):
     suite: str
 
 
+class StartCapture(BaseModel):
+    seconds: int = Field(ge=1, le=300)
+    decrypt: str | None = None  # SSID of a lab network; the API looks up its passphrase
+
+
+def lab_networks(inventory: Path) -> dict[str, tuple[str, str]]:
+    """SSID -> (security, passphrase) for every lab network with a passphrase. Passphrases stay on the
+    server: the browser only ever sees the SSIDs and picks one by name."""
+    inv = (yaml.safe_load(inventory.read_text()) if inventory.exists() else None) or {}
+    nets = {}
+    for ap in inv.get("aps") or []:
+        if ap.get("passphrase"):
+            nets[ap["ssid"]] = (ap.get("security", "wpa2"), ap["passphrase"])
+    for v in inv.get("vlans") or []:
+        if v.get("passphrase"):
+            nets[v["ssid"]] = ("wpa2", v["passphrase"])
+    home = inv.get("home") or {}
+    if home.get("ssid") and home.get("passphrase"):
+        nets[home["ssid"]] = ("mixed", home["passphrase"])
+    return nets
+
+
 # -- saved network plans --------------------------------------------------------------------------
 # The same shape as the file the builder downloads (web/src/builder.ts planToFile), checked here as well
 # as in the browser, because the API must not trust what a client sends.
@@ -278,9 +302,10 @@ class SavePlan(BaseModel):
 
 
 def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inventory.yaml",
-               is_root=lambda: os.geteuid() == 0) -> FastAPI:
+               is_root=lambda: os.geteuid() == 0, captures: CaptureJobs | None = None) -> FastAPI:
     app = FastAPI(title="wifi-testbed API")
     jobs = app.state.jobs = Jobs(reports_dir / "jobs")
+    caps = app.state.captures = captures or CaptureJobs(reports_dir / "captures")
     data = lambda: Data(reports_dir, inventory)
 
     store = RunStore(reports_dir / "runs.db", reports_dir / dashboard.HISTORY)
@@ -412,6 +437,54 @@ def create_app(reports_dir: Path = REPORTS_DIR, inventory: Path = LAB_DIR / "inv
         if not plans.delete(current_user(request)["client_id"], plan_id):
             raise HTTPException(404, "no such plan")
         return Response(status_code=204)
+
+    # -- packet captures: start one, then poll GET /api/captures/{id} until it is done or failed --------
+    def wpa_pwd(ssid: str | None) -> str | None:
+        if not ssid:
+            return None
+        net = lab_networks(inventory).get(ssid)
+        if net is None:
+            raise HTTPException(400, f"{ssid} is not a lab network with a known password")
+        return f"{net[1]}:{ssid}"
+
+    @app.get("/api/captures/networks")
+    def capture_networks():
+        return [{"ssid": k, "security": v[0]} for k, v in lab_networks(inventory).items()]
+
+    @app.post("/api/captures", status_code=202)  # 202 Accepted: the work goes on after this answer
+    def start_capture(body: StartCapture):
+        return caps.start_live(body.seconds, body.decrypt, wpa_pwd(body.decrypt))
+
+    @app.post("/api/captures/upload", status_code=202)
+    async def upload_capture(request: Request, name: str = "upload.pcap", decrypt: str | None = None):
+        # The file is the raw request body (no multipart form), so no extra library is needed.
+        # Content-Length is checked first so a huge upload is refused before it is read.
+        size = int(request.headers.get("content-length") or 0)
+        if size > MAX_UPLOAD_BYTES:
+            raise HTTPException(413, "File is larger than 50 MB.")
+        return caps.start_upload(await request.body(), name, decrypt, wpa_pwd(decrypt))
+
+    @app.get("/api/captures")
+    def list_captures():
+        return caps.recent()
+
+    @app.get("/api/captures/current")  # declared before /{capture_id} so "current" is not read as an id
+    def current_capture():
+        return {"capture": caps.current()}
+
+    @app.get("/api/captures/{capture_id}")
+    def get_capture(capture_id: str):
+        c = caps.get(capture_id)
+        if c is None:
+            raise HTTPException(404, "no such capture")
+        return c
+
+    @app.get("/api/captures/{capture_id}/pcap")
+    def capture_file(capture_id: str):
+        p = caps.pcap_path(capture_id)
+        if p is None:
+            raise HTTPException(404, "no such capture file")
+        return FileResponse(p, media_type="application/vnd.tcpdump.pcap", filename=f"capture-{capture_id}.pcap")
 
     @app.get("/api/jobs/current")
     def current_job():

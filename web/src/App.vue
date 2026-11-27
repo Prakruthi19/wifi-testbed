@@ -5,13 +5,15 @@ import { DEMO, formatTime } from './api'
 import { useSummary } from './stores/summary'
 import { useJobs } from './stores/jobs'
 import { useAuth } from './stores/auth'
+import { useCapture } from './stores/capture'
 
 // The dashboard shell: a fixed sidebar (a bottom tab bar on phones), a top bar with the data source
 // and the theme switch, and the page in the remaining space.
 const summary = useSummary()
 const jobs = useJobs()
 const auth = useAuth()
-onMounted(() => { summary.load(); jobs.resume(); auth.load() })
+const capture = useCapture()
+onMounted(() => { summary.load(); jobs.resume(); auth.load(); capture.resume() })
 const route = useRoute()
 
 const NAV = [
@@ -20,6 +22,7 @@ const NAV = [
   { to: '/runs', label: 'Test runs', icon: 'runs' },
   { to: '/coverage', label: 'Coverage', icon: 'coverage' },
   { to: '/builder', label: 'Builder', icon: 'builder' },
+  { to: '/capture', label: 'Capture', icon: 'capture' },
   { to: '/start', label: 'Start a run', icon: 'start' },
 ] as const
 // One stroke path per icon, drawn on a 24 x 24 grid.
@@ -29,6 +32,7 @@ const ICON: Record<string, string> = {
   runs: 'M4 5h4v4H4zM4 15h4v4H4zM11 7h9M11 17h9M5 7l1 1 2-2',
   coverage: 'M2 9a15 15 0 0 1 20 0M5 12.5a10 10 0 0 1 14 0M8.5 16a5 5 0 0 1 7 0M12 19.5h.01',
   start: 'M7 4l12 8-12 8z',
+  capture: 'M3 12h3l2-6 4 12 3-9 2 3h4',
   builder: 'M4 4h16v16H4zM4 12h7M11 4v16M15 13v6M12 16h6',
   collapse: 'M15 6l-6 6 6 6',
   sun: 'M12 4V2M12 22v-2M4 12H2M22 12h-2M5.6 5.6 4.2 4.2M19.8 19.8l-1.4-1.4M5.6 18.4l-1.4 1.4M19.8 4.2l-1.4 1.4M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z',
@@ -85,6 +89,10 @@ const crumb = computed(() => (route.meta.title as string) ?? '')
         <RouterLink v-if="jobs.running && jobs.job" to="/start" class="chip live" :title="`Run ${jobs.job.id} is running; open it`">
           <span class="dot" aria-hidden="true"></span>
           Running: {{ jobs.job.suite }}<template v-if="jobs.job.progress?.total">, {{ jobs.job.progress.done }}/{{ jobs.job.progress.total }}</template>
+        </RouterLink>
+        <RouterLink v-if="capture.active && capture.job" to="/capture" class="chip live" title="A packet capture is running; open it">
+          <span class="dot" aria-hidden="true"></span>
+          {{ capture.job.status === 'capturing' ? `Capturing ${Math.floor(capture.job.elapsed_s ?? 0)}/${capture.job.seconds} s` : 'Analysing capture' }}
         </RouterLink>
         <span v-if="summary.data?.sample" class="chip warn" title="Placeholder data for layout only. These are not results from a real lab run.">Sample data</span>
         <span v-else-if="DEMO" class="chip" :title="`Results saved from an emulated lab (virtual radios in a Linux VM), last run ${formatTime(summary.data?.last_finished ?? null)}`">Read-only demo</span>

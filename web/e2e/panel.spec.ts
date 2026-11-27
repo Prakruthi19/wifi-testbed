@@ -46,7 +46,7 @@ test('demo cannot start runs', async ({ page }) => {
 })
 
 test('no sideways scrolling on any page', async ({ page }) => {
-  for (const path of ['/', '/#/runs', '/#/sites', '/#/sites/oak-7', '/#/coverage', '/#/start']) {
+  for (const path of ['/', '/#/runs', '/#/sites', '/#/sites/oak-7', '/#/coverage', '/#/start', '/#/capture']) {
     await page.goto(path)
     await page.waitForLoadState('networkidle')
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)
